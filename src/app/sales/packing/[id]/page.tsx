@@ -144,8 +144,8 @@ export default function PackingListDetailPage({ params }: { params: Promise<{ id
     // Create invoice if there are packed items
     if (packedLines.length > 0) {
       const soData = pl.sales_orders
-      const subtotal = packedLines.reduce((s: number, l: any) => s + (l.packed_units * l.unit_price ?? 0), 0)
-      const totalGST = packedLines.reduce((s: number, l: any) => s + (l.packed_units * (l.unit_price ?? 0) * (l.skus?.gst_rate ?? 0) / 100), 0)
+      const subtotal = packedLines.reduce((s: number, l: any) => s + (Number(l.packed_units || 0) * Number(l.unit_price || 0)), 0)
+      const totalGST = packedLines.reduce((s: number, l: any) => s + (Number(l.packed_units || 0) * Number(l.unit_price || 0) * Number(l.sku?.gst_rate || 0) / 100), 0)
       const { data: invNum } = await supabase.rpc('next_doc_number', { p_doc_type: 'INV' })
       const { data: inv } = await supabase.from('invoices').insert({
         invoice_number: invNum, so_id: pl.so_id, packing_list_id: pl.id,
