@@ -129,7 +129,7 @@ export default function PurchaseOrdersPage() {
                     : filtered.map(po => (
                       <tr key={po.id}>
                         <td><span className="font-mono text-sm font-medium text-brand-700">{po.po_number}</span></td>
-                        <td className="font-medium">{(po.suppliers as any)?.name}</td>
+                        <td className="font-medium">{(po.supplier as any)?.name}</td>
                         <td className="text-sm">{formatDate(po.po_date)}</td>
                         <td className="font-semibold">{formatCurrency(po.grand_total)}</td>
                         <td><StatusBadge status={po.status} /></td>
