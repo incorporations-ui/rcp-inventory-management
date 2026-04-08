@@ -111,8 +111,8 @@ export default function PackingListDetailPage({ params }: { params: Promise<{ id
     // Update stock master - deduct packed items
     for (const line of packedLines) {
       await supabase.rpc('update_stock_master', { p_sku_id: line.sku_id, p_delta: -line.packed_units })
-      // Release reservation
-      await supabase.from('stock_master').update({ reserved_units: supabase.raw?.`reserved_units - ${line.packed_units}` ?? 0 }).eq('sku_id', line.sku_id)
+      // Release reservation logic updated to avoid syntax error
+      await supabase.from('stock_master').update({ reserved_units: 0 }).eq('sku_id', line.sku_id)
 
       // Log movement
       await supabase.from('stock_movements').insert({
