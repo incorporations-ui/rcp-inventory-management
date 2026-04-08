@@ -156,7 +156,7 @@ export default function SalesOrdersPage() {
   const filtered = orders.filter(o =>
     o.so_number.toLowerCase().includes(search.toLowerCase()) ||
     (o.customer as any)?.name?.toLowerCase().includes(search.toLowerCase()) ||
-    (o.customers as any)?.name?.toLowerCase().includes(search.toLowerCase())
+    (o.customer as any)?.name?.toLowerCase().includes(search.toLowerCase())
   )
 
   return (
@@ -191,8 +191,8 @@ export default function SalesOrdersPage() {
                         <td><span className="font-mono text-xs text-slate-500">{so.proforma_number ?? '—'}</span></td>
                         <td>
                           <div>
-                            <p className="font-medium text-sm">{(so.customers as any)?.name}</p>
-                            <p className="text-xs text-slate-400 capitalize">{(so.customers as any)?.customer_type}</p>
+                            <p className="font-medium text-sm">{(so.customer as any)?.name}</p>
+                            <p className="text-xs text-slate-400 capitalize">{(so.customer as any)?.customer_type}</p>
                           </div>
                         </td>
                         <td className="text-sm">{formatDate(so.so_date)}</td>
