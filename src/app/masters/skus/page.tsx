@@ -178,7 +178,7 @@ export default function SKUsPage() {
                       <option value="">Select brand...</option>
                       {brands.map(b => (
                         <option key={b.id} value={b.id}>
-                          {(b.manufacturers as any)?.name} — {b.name} ({(b.item_categories as any)?.name})
+                          {(b.manufacturer as any)?.name} — {b.name} ({(b.item_category as any)?.name})
                         </option>
                       ))}
                     </select>
