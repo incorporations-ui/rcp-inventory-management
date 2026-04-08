@@ -104,7 +104,7 @@ export default function PurchaseOrdersPage() {
 
   const filtered = orders.filter(o =>
     o.po_number?.toLowerCase().includes(search.toLowerCase()) ||
-    (o.suppliers as any)?.name?.toLowerCase().includes(search.toLowerCase())
+    (o.supplier as any)?.name?.toLowerCase().includes(search.toLowerCase())
   )
 
   return (
