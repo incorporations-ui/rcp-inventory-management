@@ -1,0 +1,151 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --brand: #4F46E5;
+  --brand-light: #EEF2FF;
+  --brand-dark: #3730A3;
+}
+
+@layer base {
+  * { box-sizing: border-box; }
+  html { font-size: 15px; }
+  body {
+    @apply bg-slate-50 text-slate-900 antialiased;
+    font-family: 'DM Sans', 'Inter', system-ui, sans-serif;
+  }
+  h1 { @apply text-2xl font-semibold tracking-tight; }
+  h2 { @apply text-xl font-semibold tracking-tight; }
+  h3 { @apply text-base font-semibold; }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm
+           transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-primary {
+    @apply btn bg-brand-600 text-white hover:bg-brand-700 active:scale-95 shadow-sm;
+  }
+  .btn-secondary {
+    @apply btn bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 active:scale-95;
+  }
+  .btn-danger {
+    @apply btn bg-red-600 text-white hover:bg-red-700 active:scale-95;
+  }
+  .btn-ghost {
+    @apply btn text-slate-600 hover:bg-slate-100 active:scale-95;
+  }
+  .btn-sm {
+    @apply px-3 py-1.5 text-xs;
+  }
+
+  .card {
+    @apply bg-white rounded-xl border border-slate-200 shadow-sm;
+  }
+  .card-header {
+    @apply px-6 py-4 border-b border-slate-100 flex items-center justify-between;
+  }
+  .card-body {
+    @apply p-6;
+  }
+
+  .input {
+    @apply w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg
+           focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent
+           placeholder:text-slate-400 transition-all;
+  }
+  .input-error {
+    @apply border-red-300 focus:ring-red-500;
+  }
+  .label {
+    @apply block text-xs font-medium text-slate-600 mb-1.5;
+  }
+  .select {
+    @apply input appearance-none cursor-pointer;
+  }
+
+  .table-wrapper {
+    @apply overflow-x-auto rounded-lg border border-slate-200;
+  }
+  table { @apply w-full text-sm; }
+  thead { @apply bg-slate-50; }
+  th {
+    @apply px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider
+           whitespace-nowrap;
+  }
+  td { @apply px-4 py-3 text-slate-700 border-t border-slate-100; }
+  tr:hover td { @apply bg-slate-50/50; }
+
+  .badge {
+    @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium;
+  }
+
+  .page-header {
+    @apply flex items-center justify-between mb-6;
+  }
+  .page-title {
+    @apply text-xl font-bold text-slate-900;
+  }
+
+  .sidebar-item {
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium
+           text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-all cursor-pointer;
+  }
+  .sidebar-item.active {
+    @apply bg-brand-50 text-brand-700 hover:bg-brand-50;
+  }
+  .sidebar-section {
+    @apply text-xs font-semibold text-slate-400 uppercase tracking-wider px-3 mb-1 mt-4;
+  }
+
+  .stat-card {
+    @apply card p-5;
+  }
+  .stat-value {
+    @apply text-2xl font-bold text-slate-900 mt-1;
+  }
+  .stat-label {
+    @apply text-xs text-slate-500 font-medium;
+  }
+
+  .ops-token {
+    @apply card p-4 border-l-4 transition-all hover:shadow-md;
+  }
+  .ops-token.pending { @apply border-l-amber-400; }
+  .ops-token.in_progress { @apply border-l-blue-500; }
+  .ops-token.ready { @apply border-l-emerald-500; }
+  .ops-token.finalized { @apply border-l-emerald-500; }
+  .ops-token.partial { @apply border-l-orange-400; }
+
+  .form-grid {
+    @apply grid grid-cols-1 md:grid-cols-2 gap-4;
+  }
+  .form-grid-3 {
+    @apply grid grid-cols-1 md:grid-cols-3 gap-4;
+  }
+
+  .divider {
+    @apply border-t border-slate-100 my-4;
+  }
+
+  .empty-state {
+    @apply flex flex-col items-center justify-center py-16 text-slate-400;
+  }
+
+  .alert { @apply p-4 rounded-lg text-sm; }
+  .alert-warning { @apply alert bg-amber-50 text-amber-800 border border-amber-200; }
+  .alert-danger  { @apply alert bg-red-50 text-red-800 border border-red-200; }
+  .alert-success { @apply alert bg-emerald-50 text-emerald-800 border border-emerald-200; }
+  .alert-info    { @apply alert bg-blue-50 text-blue-800 border border-blue-200; }
+
+  /* Print styles */
+  @media print {
+    .no-print { display: none !important; }
+    .print-only { display: block !important; }
+    body { background: white; }
+    .card { box-shadow: none; border: 1px solid #e2e8f0; }
+  }
+  .print-only { display: none; }
+}
