@@ -71,7 +71,7 @@ export default function StockingQueuePage() {
     const { data: existing } = await supabase.from('rack_stock')
       .select('id, units_count, boxes_count')
       .eq('rack_id', rackId).eq('sku_id', stockingItem.sku_id).eq('lot_id', stockingItem.lot_id)
-      .maybeSingle().catch(() => ({ data: null }))
+      .maybeSingle()
 
     if (existing) {
       await supabase.from('rack_stock').update({
