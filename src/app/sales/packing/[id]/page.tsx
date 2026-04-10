@@ -61,19 +61,20 @@ export default function PackingListDetailPage({
             .single(),
 
           supabase
-            .from('packing_list_lines')
-            .select(`
-              *,
-              skus(display_name, sku_code, gst_rate),
-              racks(rack_id_display),
-              stock_master(
-                total_units,
-                reserved_units,
-                available_units
-              )
-            `)
-            .eq('packing_list_id', id)
-            .order('id')
+  .from('packing_list_lines')
+  .select(`
+    *,
+    skus(display_name, sku_code, gst_rate),
+    rack:racks!packing_list_lines_rack_id_fkey(rack_id_display),
+    scanned_rack:racks!packing_list_lines_scanned_rack_id_fkey(rack_id_display),
+    stock_master(
+      total_units,
+      reserved_units,
+      available_units
+    )
+  `)
+  .eq('packing_list_id', id)
+  .order('id')
         ])
 
       if (plError) throw plError
