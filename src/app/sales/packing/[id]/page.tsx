@@ -21,6 +21,25 @@ export default function PackingListDetailPage({ params }: { params: { id: string
   const [scanningLineId, setScanningLineId] = useState<string | null>(null)
   const { profile } = useAuth()
   const supabase = createClient()
+  const { data, error } = await supabase
+  .from("packing_list_lines")
+  .select(`
+    id,
+    ordered_units,
+    packed_units,
+    unavailable_units,
+    sku_id,
+    skus (
+      sku_code,
+      description
+    ),
+    stock_master (
+      total_units,
+      reserved_units,
+      available_units
+    )
+  `)
+  .eq("packing_list_id", packingListId);
 
   useEffect(() => { loadData() }, [id])
 
