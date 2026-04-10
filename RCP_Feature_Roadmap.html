@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RCP Inventory — Feature Roadmap</title>
+<style>
+  :root {
+    --brand: #4F46E5;
+    --brand-light: #EEF2FF;
+    --text: #1e293b;
+    --muted: #64748b;
+    --border: #e2e8f0;
+    --bg: #f8fafc;
+    --white: #ffffff;
+    --green: #10b981;
+    --amber: #f59e0b;
+    --red: #ef4444;
+    --blue: #3b82f6;
+    --purple: #8b5cf6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.5; }
+  .header { background: linear-gradient(135deg, #312E81 0%, #4F46E5 60%, #7C3AED 100%); color: white; padding: 48px 40px; }
+  .header h1 { font-size: 32px; font-weight: 700; letter-spacing: -0.5px; }
+  .header p { color: rgba(255,255,255,0.75); margin-top: 8px; font-size: 15px; max-width: 680px; line-height: 1.6; }
+  .meta { display: flex; gap: 24px; margin-top: 24px; flex-wrap: wrap; }
+  .meta-pill { background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.2); border-radius: 20px; padding: 4px 14px; font-size: 12px; font-weight: 600; letter-spacing: 0.3px; }
+  .container { max-width: 1400px; margin: 0 auto; padding: 32px 24px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 32px; background: white; border: 1px solid var(--border); border-radius: 12px; padding: 20px 24px; }
+  .legend h3 { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); margin-bottom: 8px; width: 100%; }
+  .legend-group { display: flex; flex-wrap: wrap; gap: 8px; }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+  .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .section { margin-bottom: 40px; }
+  .section-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid var(--border); }
+  .section-num { width: 32px; height: 32px; border-radius: 8px; background: var(--brand); color: white; font-weight: 700; font-size: 14px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .section-title { font-size: 18px; font-weight: 700; }
+  .section-sub { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  table { width: 100%; border-collapse: collapse; background: white; border-radius: 12px; overflow: hidden; border: 1px solid var(--border); box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+  thead { background: #f1f5f9; }
+  th { padding: 11px 14px; text-align: left; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); white-space: nowrap; }
+  td { padding: 12px 14px; border-top: 1px solid #f1f5f9; vertical-align: top; }
+  tr:hover td { background: #fafbfc; }
+  .feature-name { font-weight: 600; color: var(--text); font-size: 13.5px; }
+  .feature-logic { color: var(--muted); font-size: 12.5px; line-height: 1.55; max-width: 320px; }
+  /* Status badges */
+  .badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 20px; font-size: 11px; font-weight: 600; letter-spacing: 0.2px; white-space: nowrap; }
+  .done      { background: #d1fae5; color: #065f46; }
+  .must      { background: #fef3c7; color: #92400e; }
+  .can       { background: #dbeafe; color: #1e40af; }
+  .bench     { background: #f1f5f9; color: #64748b; }
+  /* Phase */
+  .p-now     { background: #4F46E5; color: white; }
+  .p-q2      { background: #7C3AED; color: white; }
+  .p-q3      { background: #8b5cf6; color: white; }
+  .p-q4      { background: #a78bfa; color: white; }
+  .p-future  { background: #e5e7eb; color: #6b7280; }
+  /* Rating stars */
+  .stars { color: var(--amber); letter-spacing: 1px; font-size: 13px; }
+  .stars .empty { color: #e2e8f0; }
+  /* Difficulty */
+  .diff-easy   { color: var(--green); font-weight: 600; font-size: 12px; }
+  .diff-medium { color: var(--amber); font-weight: 600; font-size: 12px; }
+  .diff-hard   { color: var(--red); font-weight: 600; font-size: 12px; }
+  /* Priority highlight rows */
+  tr.critical td { background: #fffbeb; }
+  tr.critical td:first-child { border-left: 3px solid var(--amber); }
+  tr.built td { background: #f0fdf4; }
+  tr.built td:first-child { border-left: 3px solid var(--green); }
+  .tag { display: inline-block; background: #f1f5f9; color: #475569; border-radius: 4px; padding: 1px 6px; font-size: 11px; margin: 1px; font-family: monospace; }
+  .filters { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  .filter-btn { padding: 5px 14px; border-radius: 20px; font-size: 12px; font-weight: 600; border: 1.5px solid var(--border); background: white; cursor: pointer; transition: all 0.15s; color: var(--muted); }
+  .filter-btn:hover { border-color: var(--brand); color: var(--brand); }
+  .filter-btn.active { background: var(--brand); border-color: var(--brand); color: white; }
+  .stats-bar { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 28px; }
+  .stat-card { background: white; border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; }
+  .stat-num { font-size: 28px; font-weight: 800; color: var(--brand); line-height: 1; }
+  .stat-label { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .sql-section { background: white; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin-bottom: 32px; }
+  .sql-header { background: #1e293b; color: #94a3b8; padding: 12px 20px; font-size: 12px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; display: flex; justify-content: space-between; align-items: center; }
+  .sql-header span { color: #22d3ee; }
+  pre { background: #0f172a; color: #e2e8f0; padding: 20px; font-size: 12.5px; line-height: 1.7; overflow-x: auto; font-family: 'Cascadia Code', 'Fira Code', monospace; }
+  pre .comment { color: #64748b; }
+  pre .keyword { color: #93c5fd; }
+  pre .string { color: #86efac; }
+  pre .fn { color: #fbbf24; }
+  @media (max-width: 900px) { th:nth-child(3), td:nth-child(3) { display: none; } }
+  @media (max-width: 700px) { th:nth-child(5), td:nth-child(5), th:nth-child(6), td:nth-child(6) { display: none; } .header { padding: 32px 20px; } .container { padding: 20px 16px; } }
+  .toc { background: white; border: 1px solid var(--border); border-radius: 12px; padding: 20px 24px; margin-bottom: 32px; }
+  .toc h3 { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); margin-bottom: 12px; }
+  .toc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 6px; }
+  .toc a { color: var(--brand); text-decoration: none; font-size: 13px; display: flex; align-items: center; gap-5px; padding: 4px 0; }
+  .toc a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🗺 RCP Inventory Manager — Feature Roadmap</h1>
+  <p>Complete feature analysis across all proposed, built, and suggested capabilities. Each feature is rated by business value, categorised by priority, and assigned a delivery phase. Use this document to plan development sprints.</p>
+  <div class="meta">
+    <span class="meta-pill">📅 Generated April 2026</span>
+    <span class="meta-pill">🏢 RCP — Computer Components & Peripherals</span>
+    <span class="meta-pill">⚡ Next.js + Supabase + Vercel</span>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- Stats bar -->
+  <div class="stats-bar">
+    <div class="stat-card"><div class="stat-num">34</div><div class="stat-label">Total features tracked</div></div>
+    <div class="stat-card"><div class="stat-num" style="color:#10b981">18</div><div class="stat-label">Already built</div></div>
+    <div class="stat-card"><div class="stat-num" style="color:#f59e0b">9</div><div class="stat-label">Must-do (open)</div></div>
+    <div class="stat-card"><div class="stat-num" style="color:#3b82f6">5</div><div class="stat-label">Can-do</div></div>
+    <div class="stat-card"><div class="stat-num" style="color:#94a3b8">2</div><div class="stat-label">Bench / future</div></div>
+    <div class="stat-card"><div class="stat-num">4</div><div class="stat-label">Delivery phases</div></div>
+  </div>
+
+  <!-- Legend -->
+  <div class="legend">
+    <h3>Legend</h3>
+    <div class="legend-group">
+      <span style="font-size:11px;font-weight:700;color:var(--muted);margin-right:4px">PRIORITY:</span>
+      <span class="legend-item"><span class="dot" style="background:#065f46"></span> Built</span>
+      <span class="legend-item"><span class="dot" style="background:#92400e"></span> Must-Do</span>
+      <span class="legend-item"><span class="dot" style="background:#1e40af"></span> Can-Do</span>
+      <span class="legend-item"><span class="dot" style="background:#64748b"></span> Bench</span>
+    </div>
+    <div class="legend-group" style="margin-left:24px">
+      <span style="font-size:11px;font-weight:700;color:var(--muted);margin-right:4px">PHASE:</span>
+      <span class="legend-item"><span class="dot" style="background:#4F46E5"></span> Now (built/in-progress)</span>
+      <span class="legend-item"><span class="dot" style="background:#7C3AED"></span> Phase 2 (Q2 2026)</span>
+      <span class="legend-item"><span class="dot" style="background:#8b5cf6"></span> Phase 3 (Q3 2026)</span>
+      <span class="legend-item"><span class="dot" style="background:#a78bfa"></span> Phase 4 (Q4 2026)</span>
+      <span class="legend-item"><span class="dot" style="background:#e5e7eb"></span> Future</span>
+    </div>
+    <div class="legend-group" style="margin-left:24px">
+      <span style="font-size:11px;font-weight:700;color:var(--muted);margin-right:4px">DIFFICULTY:</span>
+      <span class="legend-item"><span class="dot" style="background:#10b981"></span> Easy (1–2 days)</span>
+      <span class="legend-item"><span class="dot" style="background:#f59e0b"></span> Medium (3–7 days)</span>
+      <span class="legend-item"><span class="dot" style="background:#ef4444"></span> Hard (1–3 weeks)</span>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <!-- SECTION 1: CORE TRANSACTION FLOWS -->
+  <!-- ─────────────────────────────────────────────── -->
+  <div class="section" id="s1">
+    <div class="section-header">
+      <div class="section-num">1</div>
+      <div><div class="section-title">Core Transaction Flows</div><div class="section-sub">Purchase, Sales, GRN, Packing, Invoice</div></div>
+    </div>
+    <table>
+      <thead><tr>
+        <th style="width:22%">Feature</th><th style="width:28%">Logic / Why it matters</th>
+        <th style="width:10%">Value ★</th><th style="width:9%">Difficulty</th>
+        <th style="width:9%">Priority</th><th style="width:9%">Phase</th><th>Tags</th>
+      </tr></thead>
+      <tbody>
+        <tr class="built"><td><div class="feature-name">Purchase Orders (PO)</div></td><td class="feature-logic">Draft → approve → GRN flow. All purchases from National Distributors tracked with line items, box/unit quantities, price, GST.</td><td><span class="stars">★★★★★</span></td><td class="diff-medium">Medium</td><td><span class="badge done">✓ Built</span></td><td><span class="badge p-now">Phase 1</span></td><td><span class="tag">purchase</span></td></tr>
+        <tr class="built"><td><div class="feature-name">GRN with line-level status</div></td><td class="feature-logic">Goods Receipt Note lets packing exec mark each line as Received / Partial / Damaged / Not Received. Fixed loading bug in this patch.</td><td><span class="stars">★★★★★</span></td><td class="diff-medium">Medium</td><td><span class="badge done">✓ Built</span></td><td><span class="badge p-now">Phase 1</span></td><td><span class="tag">purchase</span><span class="tag">grn</span></td></tr>
+        <tr class="built"><td><div class="feature-name">Lot / batch creation on GRN</div></td><td class="feature-logic">Every GRN receipt creates a lot with received date — foundation of FIFO, ageing, and traceability.</td><td><span class="stars">★★★★★</span></td><td class="diff-medium">Medium</td><td><span class="badge done">✓ Built</span></td><td><span class="badge p-now">Phase 1</span></td><td><span class="tag">lots</span><span class="tag">traceability</span></td></tr>
+        <tr class="built"><td><div class="feature-name">Stocking Queue + Rack QR scan</div></td><td class="feature-logic">After GRN finalize, new lots appear in stocking queue. Packing exec scans rack QR to place stock. System records rack location per lot.</td><td><span class="stars">★★★★★</span></td><td class="diff-hard">Hard</td><td><span class="badge done">✓ Built</span></td><td><span class="badge p-now">Phase 1</span></td><td><span class="tag">rack</span><span class="tag">qr</span></td></tr>
+        <tr class="built"><td><div class="feature-name">Sales Order + Proforma Invoice</div></td><td class="feature-logic">SO created by sales manager, auto-generates PI with separate numbering sequence (SO-series and PI-series separate as per GST rules).</td><td><span class="stars">★★★★★</span></td><td class="diff-medium">Medium</td><td><span class="badge done">✓ Built</span></td><td><span class="badge p-now">Phase 1</span></td><td><span class="tag">sales</span><span class="tag">gst</span></td></tr>
+        <tr class="built"><td><div class="feature-name">Packing List + FPPL/FUPL</div></td><td class="feature-logic">On SO approval, packing list auto-created. Exec marks each line packed or unavailable. Finalize splits into Final Packed + Final Unavailable lists. Stock mismatch flagged immediately.</td><td><span class="stars">★★★★★</span></td><td class="diff-hard">Hard</td><td><span class="badge done">✓ Built</span></td><td><span class="badge p-now">Phase 1</span></td><td><span class="tag">packing</span><span class="tag">mismatch</span></td></tr>
+        <tr class="built"><td><div class="feature-name">Tax Invoice + Dispatch</div></td><td class="feature-logic">Invoice auto-created from FPPL on packing finalize. Dispatch button marks as sent. Invoice number series separate from PI.</td><td><span class="stars">★★★★★</span></td><td class="diff-medium">Medium</td><td><span class="badge done">✓ Built</span></td><td><span class="badge p-now">Phase 1</span></td><td><span class="tag">invoice</span><span class="tag">dispatch</span></td></tr>
+        <tr class="built"><td><div class="feature-name">Returns (Sales / Purchase / Damage)</div></td><td class="feature-logic">All three return types captured with line items, condition, reason, notes. Draft → approve flow.</td><td><span class="stars">★★★★☆</span></td><td class="diff-medium">Medium</td><td><span class="badge done">✓ Built</span></td><td><span class="badge p-now">Phase 1</span></td><td><span class="tag">returns</span></td></tr>
+        <tr class="critical"><td><div class="feature-name">Payment tracking on invoices</div></td><td class="feature-logic">Record partial and full payments against invoices. Calculate outstanding balances. Mark invoices as paid. Essential for cash-flow management and credit limit enforcement.</td><td><span class="stars">★★★★★</span></td><td class="diff-medium">Medium</td><td><span class="badge must">Must-Do</span></td><td><span class="badge p-q2">Phase 2</span></td><td><span class="tag">payments</span><span class="tag">finance</span></td></tr>
+        <tr><td><div class="feature-name">SO cancellation with stock release</div></td><td class="feature-logic">Cancel an approved SO and automatically release all reserved stock. Notify packing exec if packing already started.</td><td><span class="stars">★★★★☆</span></td><td class="diff-easy">Easy</td><td><span class="badge must">Must-Do</span></td><td><span class="badge p-q2">Phase 2</span></td><td><span class="tag">sales</span><span class="tag">stock</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <!-- SECTION 2: INVENTORY MANAGEMENT -->
+  <!-- ─────────────────────────────────────────────── -->
+  <div class="section" id="s2">
+    <div class="section-header">
+      <div class="section-num">2</div>
+      <div><div class="section-title">Inventory Management</div><div class="section-sub">Stock control, adjustments, reservations, visibility</div></div>
+    </div>
+    <table>
+      <thead><tr>
+        <th style="width:22%">Feature</th><th style="width:28%">Logic / Why it matters</th>
+        <th style="width:10%">Value ★</th><th style="width:9%">Difficulty</th>
+        <th style="width:9%">Priority</th><th style="width:9%">Phase</th><th>Tags</th>
+      </tr></thead>
+      <tbody>
+        <tr class="built"><td><div class="feature-name">Stock Master with rack locations</div></td><td class="feature-logic">Unified view of total / reserved / available units per SKU with all rack positions shown. Red highlight for zero stock, amber for low stock.</td><td><span class="stars">★★★★★</span></td><td class="diff-medium">Medium</td><td><span class="badge done">✓ Built</span></td><td><span class="badge p-now">Phase 1</span></td><td><span class="tag">stock</span><span class="tag">rack</span></td></tr>
+        <tr class="built"><td><div class="feature-name">Opening Stock Entry</div></td><td class="feature-logic">Special adjustment type that creates synthetic lots (no GRN needed). Lets you enter your existing godown stock when going live. Admin approval required before stock updates.</td><td><span class="stars">★★★★★</span></td><td class="diff-medium">Medium</td><td><span class="badge done">✓ Built</span></td><td><span class="badge p-now">Phase 1</span></td><td><span class="tag">opening</span><span class="tag">adjustment</span></td></tr>
+        <tr class="built"><td><div class="feature-name">Damage Write-off</div></td><td class="feature-logic">Write off damaged stock with description and photo. Reduces stock master. Full audit trail. Admin approval required — cannot be reversed.</td><td><span class="stars">★★★★★</span></td><td class="diff-medium">Medium</td><td><span class="badge done">✓ Built</span></td><td><span class="badge p-now">Phase 1</span></td><td><span class="tag">damage</span><span class="tag">adjustment</span></td></tr>
+        <tr class="built"><td><div class="feature-name">Stock Corrections (+/−)</div></td><td class="feature-logic">After physical count, correct system stock up or down. Both types require admin approval and notes. Feeds into audit log.</td><td><span class="stars">★★★★☆</span></td><td class="diff-easy">Easy</td><td><span class="badge done">✓ Built</span></td><td><span class="badge p-now">Phase 1</span></td><td><span class="tag">correction</span></td></tr>
+        <tr class="built"><td><div class="feature-name">Manual Reservations for Clients</div></td><td class="feature-logic">Reserve specific units for a customer before an SO exists (verbal commitment, advance booking). Shows in available stock calculation. Set expiry date. Release manually or auto-convert to SO.</td><td><span class="stars">★★★★★</span></td><td class="diff-medium">Medium</td><td><span class="badge done">✓ Built</span></td><td><span class="badge p-now">Phase 1</span></td><td><span class="tag">reservation</span><span class="tag">sales</span></td></tr>
+        <tr class="built"><td><div class="feature-name">Multi-select Reservations → SO</div></td><td class="feature-logic">Select multiple active reservations for the same customer and push them all to a single new Sales Order in one click. Reservations auto-marked as converted.</td><td><span class="stars">★★★★★</span></td><td class="diff-easy">Easy</td><td><span class="badge done">✓ Built</span></td><td><span class="badge p-now">Phase 1</span></td><td><span class="tag">reservation</span><span class="tag">bulk</span></td></tr>
+        <tr class="built"><td><div class="feature-name">Stock Ageing Report</div></td><td class="feature-logic">Lot-level ageing in buckets (0–30, 31–60, 61–90, 90+ days). Bar chart + table + CSV export. Helps identify slow-moving stock before it ages further.</td><td><span class="stars">★★★★★</span></td><td class="diff-medium">Medium</td><td><span class="badge done">✓ Built</span></td><td><span class="badge p-now">Phase 1</span></td><td><span class="tag">ageing</span><span class="tag">report</span></td></tr>
+        <tr class="critical"><td><div class="feature-name">Low Stock / Reorder Alerts</div></td><td class="feature-logic">Per-SKU minimum stock level setting. Dashboard widget + email alert when available units drop below threshold. Suggests reorder quantity based on average sales velocity.</td><td><span class="stars">★★★★★</span></td><td class="diff-medium">Medium</td><td><span class="badge must">Must-Do</span></td><td><span class="badge p-q2">Phase 2</span></td><td><span class="tag">alerts</span><span class="tag">reorder</span></td></tr>
+        <tr class="critical"><td><div class="feature-name">Physical Stock Count (Cycle Count)</div></td><td class="feature-logic">Scheduled count screen where exec scans each rack and enters actual count. System shows expected vs actual. Generates a correction adjustment draft for admin approval. Essential for reconciliation.</td><td><span class="stars">★★★★★</span></td><td class="diff-hard">Hard</td><td><span class="badge must">Must-Do</span></td><td><span class="badge p-q2">Phase 2</span></td><td><span class="tag">count</span><span class="tag">reconcile</span></td></tr>
+        <tr><td><div class="feature-name">FIFO stock deduction on packing</div></td><td class="feature-logic">When packing an order, the system selects the oldest lots first (FIFO). Currently deducts from stock master without lot selection. This ties deductions to specific lots for accurate costing and ageing.</td><td><span class="stars">★★★★☆</span></td><td class="diff-hard">Hard</td><td><span class="badge can">Can-Do</span></td><td><span class="badge p-q3">Phase 3</span></td><td><span class="tag">fifo</span><span class="tag">costing</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <!-- SECTION 3: MASTERS & PRODUCT HIERARCHY -->
+  <!-- ─────────────────────────────────────────────── -->
+  <div class="section" id="s3">
+    <div class="section-header">
+      <div class="section-num">3</div>
+      <div><div class="section-title">Masters & Product Hierarchy</div><div class="section-sub">Categories, brands, SKUs, codes, QR</div></div>
+    </div>
+    <table>
+      <thead><tr>
+        <th style="width:22%">Feature</th><th style="width:28%">Logic / Why it matters</th>
+        <th style="width:10%">Value ★</th><th style="width:9%">Difficulty</th>
+        <th style="width:9%">Priority</th><th style="width:9%">Phase</th><th>Tags</th>
+      </tr></thead>
+      <tbody>
+        <tr class="built"><td><div class="feature-name">5-level product hierarchy</div></td><td class="feature-logic">Manufacturer → Product Category → Item Category → Brand → SKU. Each level has its own code, status, audit trail.</td><td><span class="stars">★★★★★</span></td><td class="diff-hard">Hard</td><td><span class="badge done">✓ Built</span></td><td><span class="badge p-now">Phase 1</span></td><td><span class="tag">hierarchy</span><span class="tag">masters</span></td></tr>
+        <tr class="built"><td><div class="feature-name">Hierarchical auto-prefixed codes</div></td><td class="feature-logic">Item Category code = PC_CODE-IC_SUFFIX. Brand code = MFG-IC_CODE-BRAND_SUFFIX. SKU code = BRAND_CODE-ATTR1-ATTR2... Auto-generated on save, live preview shown.</td><td><span class="stars">★★★★★</span></td><td class="diff-medium">Medium</td><td><span class="badge done">✓ Built</span></td><td><span class="badge p-now">Phase 1</span></td><td><span class="tag">codes</span><span class="tag">ux</span></td></tr>
+        <tr class="built"><td><div class="feature-name">Dynamic SKU attributes</div></td><td class="feature-logic">Per-item-category attribute definitions (Capacity, RPM, Interface etc.). When creating a SKU, only relevant attributes are shown. Attribute values become part of SKU code.</td><td><span class="stars">★★★★★</span></td><td class="diff-hard">Hard</td><td><span class="badge done">✓ Built</span></td><td><span class="badge p-now">Phase 1</span></td><td><span class="tag">attributes</span><span class="tag">dynamic</span></td></tr>
+        <tr class="built"><td><div class="feature-name">QR codes for every entity</div></td><td class="feature-logic">QR generated for SKU, brand, item category, product category, and rack. Download SVG, bulk print, camera scanner (Web API, no app needed).</td><td><span class="stars">★★★★★</span></td><td class="diff-medium">Medium</td><td><span class="badge done">✓ Built</span></td><td><span class="badge p-now">Phase 1</span></td><td><span class="tag">qr</span><span class="tag">scan</span></td></tr>
+        <tr class="built"><td><div class="feature-name">Soft-delete (inactive) everywhere</div></td><td class="feature-logic">Nothing can be deleted — only made inactive. Inactive records are hidden from transactions but visible in masters with reduced opacity. Full audit trail on every status change.</td><td><span class="stars">★★★★★</span></td><td class="diff-easy">Easy</td><td><span class="badge done">✓ Built</span></td><td><span class="badge p-now">Phase 1</span></td><td><span class="tag">audit</span><span class="tag">data-integrity</span></td></tr>
+        <tr class="critical"><td><div class="feature-name">Bulk SKU import via CSV</div></td><td class="feature-logic">Upload a CSV/Excel template to create 50+ SKUs at once. Critical for initial setup when migrating from a spreadsheet. System validates each row and shows errors before importing.</td><td><span class="stars">★★★★★</span></td><td class="diff-medium">Medium</td><td><span class="badge must">Must-Do</span></td><td><span class="badge p-q2">Phase 2</span></td><td><span class="tag">import</span><span class="tag">bulk</span></td></tr>
+        <tr><td><div class="feature-name">SKU barcode (EAN/UPC) field</div></td><td class="feature-logic">Store manufacturer barcode alongside the internal QR code. Allows scanning commercial barcodes during GRN receipt instead of only internal QR. Useful when ND packaging has barcodes printed.</td><td><span class="stars">★★★☆☆</span></td><td class="diff-easy">Easy</td><td><span class="badge can">Can-Do</span></td><td><span class="badge p-q3">Phase 3</span></td><td><span class="tag">barcode</span><span class="tag">grn</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <!-- SECTION 4: REPORTING & ANALYTICS -->
+  <!-- ─────────────────────────────────────────────── -->
+  <div class="section" id="s4">
+    <div class="section-header">
+      <div class="section-num">4</div>
+      <div><div class="section-title">Reporting & Analytics</div><div class="section-sub">Business intelligence, exports, dashboards</div></div>
+    </div>
+    <table>
+      <thead><tr>
+        <th style="width:22%">Feature</th><th style="width:28%">Logic / Why it matters</th>
+        <th style="width:10%">Value ★</th><th style="width:9%">Difficulty</th>
+        <th style="width:9%">Priority</th><th style="width:9%">Phase</th><th>Tags</th>
+      </tr></thead>
+      <tbody>
+        <tr class="built"><td><div class="feature-name">Live Ops Board (McDonald's style)</div></td><td class="feature-logic">Three-column real-time board: Stocking Queue / Packing In Progress / Ready for Dispatch. Progress bars. Mismatch alerts. Auto-refreshes every 30s + Supabase realtime subscriptions.</td><td><span class="stars">★★★★★</span></td><td class="diff-medium">Medium</td><td><span class="badge done">✓ Built</span></td><td><span class="badge p-now">Phase 1</span></td><td><span class="tag">ops</span><span class="tag">realtime</span></td></tr>
+        <tr class="built"><td><div class="feature-name">Analytics dashboard</div></td><td class="feature-logic">Monthly revenue bar chart, top 8 SKUs by units sold, slow movers table, customer type split pie, fill rate gauge.</td><td><span class="stars">★★★★☆</span></td><td class="diff-medium">Medium</td><td><span class="badge done">✓ Built</span></td><td><span class="badge p-now">Phase 1</span></td><td><span class="tag">analytics</span><span class="tag">charts</span></td></tr>
+        <tr class="built"><td><div class="feature-name">GST-ready CSV export</div></td><td class="feature-logic">Line-level export with HSN codes, taxable value, GST rate, GST amount. Can be imported into Tally or used for GSTR-1 filing.</td><td><span class="stars">★★★★★</span></td><td class="diff-easy">Easy</td><td><span class="badge done">✓ Built</span></td><td><span class="badge p-now">Phase 1</span></td><td><span class="tag">gst</span><span class="tag">tally</span><span class="tag">export</span></td></tr>
+        <tr class="critical"><td><div class="feature-name">Supplier performance report</div></td><td class="feature-logic">Per-ND: average PO-to-delivery time, % items received vs ordered, damage rate, price history. Identifies which suppliers deliver reliably and which don't.</td><td><span class="stars">★★★★☆</span></td><td class="diff-medium">Medium</td><td><span class="badge must">Must-Do</span></td><td><span class="badge p-q2">Phase 2</span></td><td><span class="tag">supplier</span><span class="tag">report</span></td></tr>
+        <tr class="critical"><td><div class="feature-name">Customer ledger / outstanding report</div></td><td class="feature-logic">Per-customer: all invoices, payment status, outstanding amount, credit limit usage, average payment days. Essential for collections follow-up.</td><td><span class="stars">★★★★★</span></td><td class="diff-medium">Medium</td><td><span class="badge must">Must-Do</span></td><td><span class="badge p-q2">Phase 2</span></td><td><span class="tag">customer</span><span class="tag">finance</span><span class="tag">outstanding</span></td></tr>
+        <tr><td><div class="feature-name">Inventory valuation report</div></td><td class="feature-logic">Total stock value at cost (FIFO or average cost). Breakdown by SKU, brand, category, age bucket. Required for balance sheet and insurance valuation.</td><td><span class="stars">★★★★☆</span></td><td class="diff-easy">Easy</td><td><span class="badge can">Can-Do</span></td><td><span class="badge p-q2">Phase 2</span></td><td><span class="tag">valuation</span><span class="tag">report</span></td></tr>
+        <tr><td><div class="feature-name">Sales velocity & MOQ analysis</div></td><td class="feature-logic">Average units sold per week/month per SKU, projected stockout date, suggested minimum order quantity and reorder point based on velocity × lead time.</td><td><span class="stars">★★★★☆</span></td><td class="diff-medium">Medium</td><td><span class="badge can">Can-Do</span></td><td><span class="badge p-q3">Phase 3</span></td><td><span class="tag">velocity</span><span class="tag">moq</span><span class="tag">reorder</span></td></tr>
+        <tr><td><div class="feature-name">Excel / XLSX export (not just CSV)</div></td><td class="feature-logic">True .xlsx files with formatted headers, column widths, currency formatting. Easier for non-technical staff to work with than raw CSV.</td><td><span class="stars">★★★☆☆</span></td><td class="diff-easy">Easy</td><td><span class="badge can">Can-Do</span></td><td><span class="badge p-q3">Phase 3</span></td><td><span class="tag">export</span><span class="tag">excel</span></td></tr>
+        <tr><td><div class="feature-name">Scheduled email reports</div></td><td class="feature-logic">Weekly email digest: ageing summary, outstanding invoices, low stock alerts. Sent automatically every Monday morning to admin and accounts.</td><td><span class="stars">★★★☆☆</span></td><td class="diff-hard">Hard</td><td><span class="badge bench">Bench</span></td><td><span class="badge p-future">Future</span></td><td><span class="tag">email</span><span class="tag">automation</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <!-- SECTION 5: CLIENT & PORTAL FEATURES -->
+  <!-- ─────────────────────────────────────────────── -->
+  <div class="section" id="s5">
+    <div class="section-header">
+      <div class="section-num">5</div>
+      <div><div class="section-title">Client Portal & External Facing</div><div class="section-sub">Self-service for distributors and retailers</div></div>
+    </div>
+    <table>
+      <thead><tr>
+        <th style="width:22%">Feature</th><th style="width:28%">Logic / Why it matters</th>
+        <th style="width:10%">Value ★</th><th style="width:9%">Difficulty</th>
+        <th style="width:9%">Priority</th><th style="width:9%">Phase</th><th>Tags</th>
+      </tr></thead>
+      <tbody>
+        <tr class="built"><td><div class="feature-name">Client Order Request Portal</div></td><td class="feature-logic">Public-facing page at /client. Customer logs in with their code, browses available stock (live availability shown), selects quantities, submits request. No pricing shown — sales manager fills that.</td><td><span class="stars">★★★★★</span></td><td class="diff-medium">Medium</td><td><span class="badge done">✓ Built</span></td><td><span class="badge p-now">Phase 1</span></td><td><span class="tag">portal</span><span class="tag">client</span></td></tr>
+        <tr class="critical"><td><div class="feature-name">Client portal: order history</div></td><td class="feature-logic">Let customers see their own past SOs and invoice status after logging in with customer code. Reduces "where is my order?" calls to the sales team.</td><td><span class="stars">★★★★☆</span></td><td class="diff-medium">Medium</td><td><span class="badge must">Must-Do</span></td><td><span class="badge p-q2">Phase 2</span></td><td><span class="tag">portal</span><span class="tag">self-service</span></td></tr>
+        <tr><td><div class="feature-name">Client portal: invoice download</div></td><td class="feature-logic">Customers can download their own invoices as PDF directly from the portal. Saves sales team time forwarding documents over WhatsApp/email.</td><td><span class="stars">★★★★☆</span></td><td class="diff-medium">Medium</td><td><span class="badge can">Can-Do</span></td><td><span class="badge p-q3">Phase 3</span></td><td><span class="tag">portal</span><span class="tag">pdf</span></td></tr>
+        <tr><td><div class="feature-name">WhatsApp notification on SO approval</div></td><td class="feature-logic">When a Proforma Invoice is generated, auto-send PDF to customer's WhatsApp via Twilio or official WA Business API. Faster than email for the Indian market.</td><td><span class="stars">★★★★★</span></td><td class="diff-hard">Hard</td><td><span class="badge can">Can-Do</span></td><td><span class="badge p-q4">Phase 4</span></td><td><span class="tag">whatsapp</span><span class="tag">notifications</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <!-- SECTION 6: OPERATIONS & ROLES -->
+  <!-- ─────────────────────────────────────────────── -->
+  <div class="section" id="s6">
+    <div class="section-header">
+      <div class="section-num">6</div>
+      <div><div class="section-title">Operations, Roles & System</div><div class="section-sub">Access control, audit, performance, integrations</div></div>
+    </div>
+    <table>
+      <thead><tr>
+        <th style="width:22%">Feature</th><th style="width:28%">Logic / Why it matters</th>
+        <th style="width:10%">Value ★</th><th style="width:9%">Difficulty</th>
+        <th style="width:9%">Priority</th><th style="width:9%">Phase</th><th>Tags</th>
+      </tr></thead>
+      <tbody>
+        <tr class="built"><td><div class="feature-name">5-role RBAC (Row Level Security)</div></td><td class="feature-logic">Admin / Sales Manager / Packing Exec / Accounts / View Only. Enforced at database level via Supabase RLS — not just frontend. Users can only see/do what their role allows.</td><td><span class="stars">★★★★★</span></td><td class="diff-hard">Hard</td><td><span class="badge done">✓ Built</span></td><td><span class="badge p-now">Phase 1</span></td><td><span class="tag">rbac</span><span class="tag">security</span></td></tr>
+        <tr class="built"><td><div class="feature-name">Comprehensive audit log</div></td><td class="feature-logic">Every INSERT/UPDATE/DELETE on all transaction tables is logged with user ID, timestamp, old and new data (JSON diff). Queryable from Supabase SQL editor.</td><td><span class="stars">★★★★★</span></td><td class="diff-easy">Easy</td><td><span class="badge done">✓ Built</span></td><td><span class="badge p-now">Phase 1</span></td><td><span class="tag">audit</span><span class="tag">compliance</span></td></tr>
+        <tr class="critical"><td><div class="feature-name">Audit log UI in-app</div></td><td class="feature-logic">Admin screen showing recent changes with filters by user, date, table. Currently only accessible via Supabase SQL editor. Needed to investigate stock discrepancies without SQL knowledge.</td><td><span class="stars">★★★★☆</span></td><td class="diff-easy">Easy</td><td><span class="badge must">Must-Do</span></td><td><span class="badge p-q2">Phase 2</span></td><td><span class="tag">audit</span><span class="tag">admin</span></td></tr>
+        <tr><td><div class="feature-name">Printable invoice PDF</div></td><td class="feature-logic">Generate a properly formatted Tax Invoice PDF with company logo, GSTIN, HSN codes, GST breakup (CGST/SGST/IGST), and e-invoice QR code placeholder. Currently print via browser only.</td><td><span class="stars">★★★★★</span></td><td class="diff-hard">Hard</td><td><span class="badge must">Must-Do</span></td><td><span class="badge p-q2">Phase 2</span></td><td><span class="tag">pdf</span><span class="tag">gst</span><span class="tag">invoice</span></td></tr>
+        <tr><td><div class="feature-name">Multi-godown / warehouse support</div></td><td class="feature-logic">Tag racks to a specific godown/location. Filter stock, packing lists, and reports by godown. Useful if RCP expands beyond one location.</td><td><span class="stars">★★★☆☆</span></td><td class="diff-medium">Medium</td><td><span class="badge bench">Bench</span></td><td><span class="badge p-future">Future</span></td><td><span class="tag">warehouse</span><span class="tag">expansion</span></td></tr>
+        <tr><td><div class="feature-name">Tally direct integration</div></td><td class="feature-logic">Push invoices, receipts, and payments directly into Tally via Tally XML connector. Eliminates manual re-entry. Requires Tally running on a local network server.</td><td><span class="stars">★★★★☆</span></td><td class="diff-hard">Hard</td><td><span class="badge can">Can-Do</span></td><td><span class="badge p-q4">Phase 4</span></td><td><span class="tag">tally</span><span class="tag">integration</span></td></tr>
+        <tr><td><div class="feature-name">Mobile app (React Native)</div></td><td class="feature-logic">Native iOS/Android app for packing executives — optimised QR scanner, offline GRN entry, push notifications for new packing lists. The web app already works on mobile but a native app gives better camera access.</td><td><span class="stars">★★★☆☆</span></td><td class="diff-hard">Hard</td><td><span class="badge bench">Bench</span></td><td><span class="badge p-future">Future</span></td><td><span class="tag">mobile</span><span class="tag">app</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <!-- SQL QUICK REFERENCE -->
+  <!-- ─────────────────────────────────────────────── -->
+  <div class="section" id="sql">
+    <div class="section-header">
+      <div class="section-num" style="background:#0f172a">⌥</div>
+      <div><div class="section-title">SQL Quick Reference — Supabase</div><div class="section-sub">Useful queries to run in the SQL Editor for setup, debugging, and resets</div></div>
+    </div>
+
+    <div class="sql-section">
+      <div class="sql-header"><span>1. Create first admin user (run after creating user in Auth)</span></div>
+      <pre><span class="comment">-- Replace the UUID and name with your actual values from Auth → Users</span>
+<span class="keyword">INSERT INTO</span> user_profiles (id, full_name, role, is_active)
+<span class="keyword">VALUES</span> (
+  <span class="string">'paste-your-auth-user-uuid-here'</span>,
+  <span class="string">'Your Full Name'</span>,
+  <span class="string">'admin'</span>,
+  <span class="keyword">true</span>
+);</pre>
+    </div>
+
+    <div class="sql-section">
+      <div class="sql-header"><span>2. Check current stock summary</span></div>
+      <pre><span class="keyword">SELECT</span> sku_code, display_name, total_units, so_reserved_units,
+       manual_reserved_units, truly_available_units
+<span class="keyword">FROM</span> stock_summary
+<span class="keyword">ORDER BY</span> truly_available_units <span class="keyword">ASC</span>;  <span class="comment">-- lowest available first</span></pre>
+    </div>
+
+    <div class="sql-section">
+      <div class="sql-header"><span>3. Check audit log — last 50 changes</span></div>
+      <pre><span class="keyword">SELECT</span> al.table_name, al.action, al.changed_at,
+       up.full_name <span class="keyword">AS</span> changed_by,
+       al.old_data, al.new_data
+<span class="keyword">FROM</span> audit_log al
+<span class="keyword">LEFT JOIN</span> user_profiles up <span class="keyword">ON</span> up.id = al.changed_by
+<span class="keyword">ORDER BY</span> al.changed_at <span class="keyword">DESC</span>
+<span class="keyword">LIMIT</span> 50;</pre>
+    </div>
+
+    <div class="sql-section">
+      <div class="sql-header"><span>4. Reset ALL transaction data (keep masters) — USE WITH CAUTION</span></div>
+      <pre><span class="comment">-- This wipes all POs, GRNs, SOs, invoices, stock, lots, movements etc.</span>
+<span class="comment">-- Masters (SKUs, brands, racks, customers, suppliers) are preserved.</span>
+<span class="comment">-- Sequences are reset to 0.</span>
+<span class="keyword">SELECT</span> <span class="fn">reset_transaction_data</span>();</pre>
+    </div>
+
+    <div class="sql-section">
+      <div class="sql-header"><span>5. Fix stock master if numbers seem wrong</span></div>
+      <pre><span class="comment">-- Recalculate total_units from stock_movements ledger</span>
+<span class="keyword">UPDATE</span> stock_master sm
+<span class="keyword">SET</span> total_units = (
+  <span class="keyword">SELECT</span> <span class="fn">COALESCE</span>(<span class="fn">SUM</span>(units_in) - <span class="fn">SUM</span>(units_out), 0)
+  <span class="keyword">FROM</span> stock_movements
+  <span class="keyword">WHERE</span> sku_id = sm.sku_id
+),
+last_updated = <span class="fn">NOW</span>();
+
+<span class="comment">-- Then check results</span>
+<span class="keyword">SELECT</span> * <span class="keyword">FROM</span> stock_summary <span class="keyword">WHERE</span> truly_available_units &lt; 0;</pre>
+    </div>
+
+    <div class="sql-section">
+      <div class="sql-header"><span>6. View all active reservations with customer names</span></div>
+      <pre><span class="keyword">SELECT</span> r.reservation_no, c.name <span class="keyword">AS</span> customer, s.display_name <span class="keyword">AS</span> sku,
+       r.reserved_units, r.reserved_until, r.status, up.full_name <span class="keyword">AS</span> reserved_by
+<span class="keyword">FROM</span> manual_reservations r
+<span class="keyword">JOIN</span> customers c  <span class="keyword">ON</span> c.id = r.customer_id
+<span class="keyword">JOIN</span> skus s       <span class="keyword">ON</span> s.id = r.sku_id
+<span class="keyword">JOIN</span> user_profiles up <span class="keyword">ON</span> up.id = r.reserved_by
+<span class="keyword">WHERE</span> r.status = <span class="string">'active'</span>
+<span class="keyword">ORDER BY</span> r.created_at;</pre>
+    </div>
+
+    <div class="sql-section">
+      <div class="sql-header"><span>7. Stock ageing summary (quick view)</span></div>
+      <pre><span class="keyword">SELECT</span> age_bucket,
+       <span class="fn">COUNT</span>(*) <span class="keyword">AS</span> lots,
+       <span class="fn">SUM</span>(remaining_units) <span class="keyword">AS</span> total_units,
+       <span class="fn">ROUND</span>(<span class="fn">SUM</span>(stock_value)::numeric, 2) <span class="keyword">AS</span> total_value
+<span class="keyword">FROM</span> stock_ageing
+<span class="keyword">GROUP BY</span> age_bucket
+<span class="keyword">ORDER BY</span> <span class="fn">MIN</span>(age_days);</pre>
+    </div>
+
+    <div class="sql-section">
+      <div class="sql-header"><span>8. Find all GRN lines that are still pending (shouldn't be any after finalization)</span></div>
+      <pre><span class="keyword">SELECT</span> g.grn_number, gl.sku_id, s.display_name, gl.expected_units, gl.status
+<span class="keyword">FROM</span> grn_lines gl
+<span class="keyword">JOIN</span> grns g     <span class="keyword">ON</span> g.id = gl.grn_id
+<span class="keyword">JOIN</span> skus s     <span class="keyword">ON</span> s.id = gl.sku_id
+<span class="keyword">WHERE</span> gl.status = <span class="string">'pending'</span>
+<span class="keyword">AND</span>   g.status  = <span class="string">'finalized'</span>;  <span class="comment">-- these are data inconsistencies</span></pre>
+    </div>
+
+    <div class="sql-section">
+      <div class="sql-header"><span>9. Document sequence current state</span></div>
+      <pre><span class="keyword">SELECT</span> doc_type, prefix, current_number, fiscal_year,
+       prefix || <span class="string">'-'</span> || fiscal_year || <span class="string">'-'</span> || <span class="fn">LPAD</span>((current_number+1)::text, 5, <span class="string">'0'</span>) <span class="keyword">AS</span> next_number
+<span class="keyword">FROM</span> document_sequences
+<span class="keyword">ORDER BY</span> doc_type;</pre>
+    </div>
+
+    <div class="sql-section">
+      <div class="sql-header"><span>10. WIPE EVERYTHING including masters — absolute fresh start</span></div>
+      <pre><span class="comment">-- ⚠ DANGER: This deletes ALL data. Run only on a fresh deployment.</span>
+<span class="comment">-- Uncomment and run each TRUNCATE block manually.</span>
+
+<span class="comment">/*
+TRUNCATE TABLE
+  invoice_lines, invoices, packing_list_lines, packing_lists,
+  so_lines, sales_orders, stock_adjustment_lines, stock_adjustments,
+  manual_reservations, return_lines, returns, stock_movements,
+  grn_stocking_queue, rack_stock, lots, grn_lines, grns,
+  po_lines, purchase_orders, stock_master, audit_log,
+  sku_attributes, skus, brands, sku_attribute_definitions,
+  item_categories, product_categories, manufacturers,
+  racks, customers, suppliers, qr_codes
+CASCADE;
+
+UPDATE document_sequences SET current_number = 0;
+*/</span></pre>
+    </div>
+  </div>
+
+  <!-- Summary -->
+  <div style="background:white;border:1px solid var(--border);border-radius:12px;padding:24px 28px;margin-top:8px">
+    <h3 style="font-size:16px;font-weight:700;margin-bottom:12px">Recommended Execution Order</h3>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px">
+      <div style="background:#EEF2FF;border-radius:10px;padding:16px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#4338CA;margin-bottom:8px">Phase 1 — Now (Live)</div>
+        <ul style="font-size:13px;color:#3730A3;line-height:2;list-style:none">
+          <li>✅ Full PO → GRN → Stock flow</li>
+          <li>✅ SO → Packing → Invoice flow</li>
+          <li>✅ Opening stock, damage write-offs</li>
+          <li>✅ Manual reservations → SO</li>
+          <li>✅ Client portal</li>
+          <li>✅ Hierarchical codes, QR codes</li>
+        </ul>
+      </div>
+      <div style="background:#FEF3C7;border-radius:10px;padding:16px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#92400E;margin-bottom:8px">Phase 2 — Q2 2026</div>
+        <ul style="font-size:13px;color:#78350F;line-height:2;list-style:none">
+          <li>🔲 Payment tracking on invoices</li>
+          <li>🔲 Printable Tax Invoice PDF</li>
+          <li>🔲 Low stock / reorder alerts</li>
+          <li>🔲 Customer outstanding report</li>
+          <li>🔲 Audit log UI (in-app)</li>
+          <li>🔲 Bulk SKU CSV import</li>
+          <li>🔲 Physical stock cycle count</li>
+        </ul>
+      </div>
+      <div style="background:#F0FDF4;border-radius:10px;padding:16px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#065F46;margin-bottom:8px">Phase 3 — Q3 2026</div>
+        <ul style="font-size:13px;color:#064E3B;line-height:2;list-style:none">
+          <li>🔲 FIFO stock deduction</li>
+          <li>🔲 Sales velocity & MOQ analysis</li>
+          <li>🔲 Client portal: order history</li>
+          <li>🔲 Excel XLSX exports</li>
+          <li>🔲 Inventory valuation report</li>
+          <li>🔲 Supplier performance report</li>
+        </ul>
+      </div>
+      <div style="background:#F5F3FF;border-radius:10px;padding:16px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#5B21B6;margin-bottom:8px">Phase 4 — Q4 2026 & Beyond</div>
+        <ul style="font-size:13px;color:#4C1D95;line-height:2;list-style:none">
+          <li>🔲 WhatsApp notifications</li>
+          <li>🔲 Tally direct integration</li>
+          <li>🔲 GST e-invoicing (IRN/QR)</li>
+          <li>🔲 Multi-godown support</li>
+          <li>🔲 Native mobile app</li>
+          <li>🔲 Scheduled email reports</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <p style="text-align:center;color:var(--muted);font-size:12px;margin-top:28px;padding-bottom:16px">
+    RCP Inventory Manager · Feature Roadmap · Generated April 2026 · Built with Next.js + Supabase + Vercel
+  </p>
+</div>
+</body>
+</html>

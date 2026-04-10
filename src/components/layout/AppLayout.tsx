@@ -8,7 +8,7 @@ import {
   LayoutDashboard, Package2, ShoppingCart, Truck, ClipboardList,
   FileText, RotateCcw, BarChart2, Settings, LogOut, Menu, X,
   Boxes, Building2, Users, Layers, Tag, Warehouse, ChevronDown, ChevronRight,
-  PackageCheck, PackageSearch, Receipt, AlertTriangle
+  PackageCheck, PackageSearch, Receipt, AlertTriangle, Globe, Lock, ClipboardEdit
 } from 'lucide-react'
 
 interface NavItem {
@@ -45,6 +45,8 @@ const navigation: NavItem[] = [
     children: [
       { label: 'Stock Master', href: '/inventory/stock', icon: Package2 },
       { label: 'Rack Locations', href: '/inventory/racks-stock', icon: Warehouse },
+      { label: 'Reservations', href: '/inventory/reservations', icon: Lock },
+      { label: 'Adjustments', href: '/inventory/adjustments', icon: ClipboardEdit },
       { label: 'Ageing Report', href: '/inventory/ageing', icon: AlertTriangle },
     ]
   },
@@ -68,6 +70,7 @@ const navigation: NavItem[] = [
     ]
   },
   { label: 'Users', href: '/users', icon: Users, roles: ['admin'] },
+  { label: 'Client Portal', href: '/client', icon: Globe, roles: ['admin', 'sales_manager'] },
 ]
 
 function NavItemComponent({ item, depth = 0 }: { item: NavItem; depth?: number }) {
