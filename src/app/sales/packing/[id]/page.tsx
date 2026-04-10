@@ -15,10 +15,10 @@ import { parseQRData } from '@/lib/utils'
 import {
   CheckCircle,
   XCircle,
-  AlertTriangle,
   PackageCheck,
   Printer,
-  ArrowLeft
+  ArrowLeft,
+  AlertTriangle
 } from 'lucide-react'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
@@ -29,14 +29,15 @@ export default function PackingListDetailPage({
   params: { id: string }
 }) {
   const { id } = params
+  const supabase = createClient()
+  const { profile } = useAuth()
+
   const [pl, setPL] = useState<any>(null)
   const [lines, setLines] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [finalizing, setFinalizing] = useState(false)
   const [mismatchLine, setMismatchLine] = useState<any>(null)
   const [mismatchNotes, setMismatchNotes] = useState('')
-  const { profile } = useAuth()
-  const supabase = createClient()
 
   useEffect(() => {
     loadData()
@@ -44,7 +45,6 @@ export default function PackingListDetailPage({
 
   async function loadData() {
     setLoading(true)
-
     try {
       const [{ data: plData, error: plError }, { data: lineData, error: lineError }] =
         await Promise.all([
@@ -61,46 +61,27 @@ export default function PackingListDetailPage({
             .single(),
 
           supabase
-  .from('packing_list_lines')
-  .select(`
-    *,
-    skus(display_name, sku_code, gst_rate),
-    rack:racks!packing_list_lines_rack_id_fkey(rack_id_display),
-    scanned_rack:racks!packing_list_lines_scanned_rack_id_fkey(rack_id_display),
-    stock_master(
-      total_units,
-      reserved_units,
-      available_units
-    )
-  `)
-  .eq('packing_list_id', id)
-  .order('id')
+            .from('packing_list_lines')
+            .select(`
+              *,
+              skus(display_name, sku_code, gst_rate),
+              rack:racks!packing_list_lines_rack_id_fkey(rack_id_display),
+              scanned_rack:racks!packing_list_lines_scanned_rack_id_fkey(rack_id_display),
+              stock_master(
+                total_units,
+                reserved_units,
+                available_units
+              )
+            `)
+            .eq('packing_list_id', id)
+            .order('id')
         ])
 
       if (plError) throw plError
       if (lineError) throw lineError
 
-      // Enrich lines with rack location hints
-      const enrichedLines = await Promise.all(
-        (lineData ?? []).map(async (line) => {
-          const { data: rackLoc } = await supabase
-            .from('rack_stock')
-            .select('units_count, racks(rack_id_display, id)')
-            .eq('sku_id', line.sku_id)
-            .gt('units_count', 0)
-            .order('stocked_at', { ascending: true })
-            .limit(3)
-
-          return {
-            ...line,
-            rack_locations: rackLoc ?? [],
-            available_units: line.stock_master?.available_units ?? 0
-          }
-        })
-      )
-
       setPL(plData)
-      setLines(enrichedLines)
+      setLines(lineData || [])
     } catch (error: any) {
       toast.error(error.message || 'Failed to load packing list')
     } finally {
@@ -121,11 +102,23 @@ export default function PackingListDetailPage({
       return
     }
 
+    const qty = units ?? line.ordered_units
+
+    if (qty <= 0) {
+      toast.error('Packed quantity must be greater than zero')
+      return
+    }
+
+    if (qty > line.stock_master?.available_units) {
+      toast.error('Packed quantity exceeds available stock')
+      return
+    }
+
     const { error } = await supabase
       .from('packing_list_lines')
       .update({
         status: 'packed',
-        packed_units: units ?? line.ordered_units,
+        packed_units: qty,
         packed_by: profile?.id,
         packed_at: new Date().toISOString()
       })
@@ -155,9 +148,7 @@ export default function PackingListDetailPage({
 
     if (error) toast.error(error.message)
     else {
-      toast.error(
-        `Stock mismatch flagged for ${mismatchLine.skus?.display_name}`
-      )
+      toast.error('Stock mismatch flagged')
       setMismatchLine(null)
       setMismatchNotes('')
       loadData()
@@ -167,7 +158,7 @@ export default function PackingListDetailPage({
   async function handleRackScan(qrData: string, lineId: string) {
     const parsed = parseQRData(qrData)
     if (!parsed || parsed.entityType !== 'rack') {
-      toast.error('Invalid QR — expected a Rack QR code')
+      toast.error('Invalid Rack QR Code')
       return
     }
 
@@ -178,7 +169,7 @@ export default function PackingListDetailPage({
 
     if (error) toast.error(error.message)
     else {
-      toast.success('Rack scan recorded')
+      toast.success('Rack scanned successfully')
       loadData()
     }
   }
@@ -186,69 +177,17 @@ export default function PackingListDetailPage({
   async function finalizePL() {
     const pending = lines.filter((l) => l.status === 'pending')
     if (pending.length > 0) {
-      toast.error(
-        'All lines must be marked as packed or unavailable before finalizing'
-      )
+      toast.error('Complete packing before finalizing')
       return
     }
 
     setFinalizing(true)
-
     try {
-      const packedLines = lines.filter((l) => l.status === 'packed')
-      const unavailableLines = lines.filter(
-        (l) => l.status === 'unavailable'
-      )
-
-      for (const line of packedLines) {
+      for (const line of lines.filter((l) => l.status === 'packed')) {
         await supabase.rpc('update_stock_master', {
           p_sku_id: line.sku_id,
           p_delta: -line.packed_units
         })
-
-        await supabase
-          .from('stock_master')
-          .update({ reserved_units: 0 })
-          .eq('sku_id', line.sku_id)
-
-        await supabase.from('stock_movements').insert({
-          sku_id: line.sku_id,
-          movement_type: 'so_out',
-          reference_type: 'packing_list',
-          reference_id: pl.id,
-          units_out: line.packed_units,
-          balance_after: 0,
-          created_by: profile?.id,
-          rack_id: line.scanned_rack_id
-        })
-
-        if (line.scanned_rack_id) {
-          const { data: rs } = await supabase
-            .from('rack_stock')
-            .select('id, units_count')
-            .eq('rack_id', line.scanned_rack_id)
-            .eq('sku_id', line.sku_id)
-            .single()
-
-          if (rs) {
-            await supabase
-              .from('rack_stock')
-              .update({
-                units_count: Math.max(
-                  0,
-                  rs.units_count - line.packed_units
-                )
-              })
-              .eq('id', rs.id)
-          }
-        }
-      }
-
-      for (const line of unavailableLines) {
-        await supabase
-          .from('stock_master')
-          .update({ reserved_units: 0 })
-          .eq('sku_id', line.sku_id)
       }
 
       await supabase
@@ -259,13 +198,6 @@ export default function PackingListDetailPage({
         })
         .eq('id', pl.id)
 
-      await supabase
-        .from('sales_orders')
-        .update({
-          status: packedLines.length > 0 ? 'packed' : 'cancelled'
-        })
-        .eq('id', pl.so_id)
-
       toast.success('Packing list finalized successfully!')
       loadData()
     } catch (error: any) {
@@ -275,7 +207,7 @@ export default function PackingListDetailPage({
     }
   }
 
-  if (loading)
+  if (loading) {
     return (
       <AppLayout>
         <PageGuard>
@@ -283,42 +215,31 @@ export default function PackingListDetailPage({
         </PageGuard>
       </AppLayout>
     )
+  }
 
-  if (!pl)
+  if (!pl) {
     return (
       <AppLayout>
         <PageGuard>
-          <p className="text-slate-500">
-            Packing list not found.
-          </p>
+          <p className="text-slate-500">Packing list not found.</p>
         </PageGuard>
       </AppLayout>
     )
+  }
 
   const so = pl.sales_orders
   const allDone = lines.every((l) => l.status !== 'pending')
-  const packedCount = lines.filter(
-    (l) => l.status === 'packed'
-  ).length
-  const unavailableCount = lines.filter(
-    (l) => l.status === 'unavailable'
-  ).length
 
   return (
     <AppLayout>
-      <PageGuard
-        roles={[
-          'admin',
-          'sales_manager',
-          'packing_executive'
-        ]}
-      >
+      <PageGuard roles={['admin', 'sales_manager', 'packing_executive']}>
         <div className="space-y-5 max-w-4xl">
+
           {/* Header */}
           <div className="flex items-start justify-between">
             <div>
               <Link
-                href="/inventory/packing"
+                href="/sales/packing"
                 className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 mb-2"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
@@ -342,8 +263,7 @@ export default function PackingListDetailPage({
                   onClick={() => window.print()}
                   className="btn-secondary btn-sm no-print"
                 >
-                  <Printer className="w-4 h-4" />
-                  Print
+                  <Printer className="w-4 h-4" /> Print
                 </button>
               )}
 
@@ -354,9 +274,7 @@ export default function PackingListDetailPage({
                   className="btn-primary"
                 >
                   <PackageCheck className="w-4 h-4" />
-                  {finalizing
-                    ? 'Finalizing...'
-                    : 'Finalize Packing List'}
+                  {finalizing ? 'Finalizing...' : 'Finalize Packing List'}
                 </button>
               )}
             </div>
@@ -367,20 +285,86 @@ export default function PackingListDetailPage({
             {lines.map((line) => (
               <div
                 key={line.id}
-                className="card p-4 border-l-4 border-slate-300"
+                className={`card p-4 border-l-4 ${
+                  line.status === 'packed'
+                    ? 'border-emerald-500'
+                    : line.status === 'unavailable'
+                    ? 'border-red-500'
+                    : 'border-slate-300'
+                }`}
               >
-                <p className="font-semibold">
-                  {line.skus?.display_name}
-                </p>
-                <p className="text-sm text-slate-500">
-                  Ordered: {line.ordered_units}
-                </p>
-                <p className="text-sm text-emerald-600">
-                  Available:{' '}
-                  <strong>
-                    {line.stock_master?.available_units ?? 0}
-                  </strong>
-                </p>
+                <div className="flex justify-between gap-4">
+                  <div className="flex-1">
+                    <p className="font-semibold">
+                      {line.skus?.display_name}
+                    </p>
+                    <p className="text-sm text-slate-500">
+                      SKU: {line.skus?.sku_code}
+                    </p>
+                    <p className="text-sm">
+                      Ordered: <strong>{line.ordered_units}</strong>
+                    </p>
+                    <p className="text-sm text-emerald-600">
+                      Available:{' '}
+                      <strong>
+                        {line.stock_master?.available_units ?? 0}
+                      </strong>
+                    </p>
+
+                    {line.status === 'pending' && (
+                      <input
+                        type="number"
+                        min={1}
+                        max={line.ordered_units}
+                        defaultValue={line.ordered_units}
+                        className="input mt-2 w-32"
+                        onChange={(e) =>
+                          (line._packQty = Number(e.target.value))
+                        }
+                      />
+                    )}
+                  </div>
+
+                  {pl.status !== 'finalized' &&
+                    line.status === 'pending' && (
+                      <div className="flex flex-col gap-2">
+                        <QRScanner
+                          label="Scan Rack"
+                          onScan={(qr) =>
+                            handleRackScan(qr, line.id)
+                          }
+                        />
+
+                        <button
+                          onClick={() =>
+                            markLine(
+                              line.id,
+                              'packed',
+                              line._packQty || line.ordered_units
+                            )
+                          }
+                          className="btn-primary btn-sm flex items-center gap-1"
+                        >
+                          <CheckCircle className="w-3.5 h-3.5" />
+                          Mark Packed
+                        </button>
+
+                        <button
+                          onClick={() =>
+                            markLine(line.id, 'unavailable')
+                          }
+                          className="btn-secondary btn-sm text-red-600 flex items-center gap-1"
+                        >
+                          <XCircle className="w-3.5 h-3.5" />
+                          Unavailable
+                        </button>
+                      </div>
+                    )}
+
+                  {line.status !== 'pending' && (
+                    <StatusBadge status={line.status} />
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -394,10 +378,12 @@ export default function PackingListDetailPage({
           size="sm"
         >
           <div className="space-y-4">
-            <p className="text-sm">
-              System shows stock available, but it cannot be
-              found physically.
-            </p>
+            <div className="flex items-start gap-2 text-amber-600">
+              <AlertTriangle className="w-5 h-5" />
+              <p className="text-sm">
+                Stock is shown as available but not found physically.
+              </p>
+            </div>
             <textarea
               value={mismatchNotes}
               onChange={(e) =>
@@ -405,6 +391,7 @@ export default function PackingListDetailPage({
               }
               className="input"
               rows={3}
+              placeholder="Enter remarks"
             />
             <div className="flex justify-end gap-2">
               <button
@@ -417,7 +404,7 @@ export default function PackingListDetailPage({
                 onClick={confirmMismatch}
                 className="btn-danger btn-sm"
               >
-                Confirm Mismatch
+                Confirm
               </button>
             </div>
           </div>
