@@ -106,9 +106,11 @@ export function QRScanner({ onScan, label = 'Scan QR Code' }: QRScannerProps) {
   const [manualInput, setManualInput] = useState('')
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
+  const scanningRef = useRef(false)  // ← ref flag avoids stale closure bug
 
   async function startCamera() {
     setError('')
+    scanningRef.current = true
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'environment' }
@@ -122,7 +124,7 @@ export function QRScanner({ onScan, label = 'Scan QR Code' }: QRScannerProps) {
       if ('BarcodeDetector' in window) {
         const detector = new (window as any).BarcodeDetector({ formats: ['qr_code'] })
         const scan = async () => {
-          if (!videoRef.current || !open) return
+          if (!videoRef.current || !scanningRef.current) return  // ← use ref, not stale 'open'
           try {
             const barcodes = await detector.detect(videoRef.current)
             if (barcodes.length > 0) {
@@ -140,6 +142,7 @@ export function QRScanner({ onScan, label = 'Scan QR Code' }: QRScannerProps) {
   }
 
   function stopCamera() {
+    scanningRef.current = false  // ← stops the rAF loop immediately
     streamRef.current?.getTracks().forEach(t => t.stop())
     streamRef.current = null
   }

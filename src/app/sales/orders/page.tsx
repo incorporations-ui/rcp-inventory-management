@@ -28,6 +28,9 @@ export default function SalesOrdersPage() {
   const [deliveryAddress, setDeliveryAddress] = useState('')
   const [notes, setNotes] = useState('')
   const [lines, setLines] = useState<SOLine[]>([{ sku_id: '', ordered_boxes: 0, ordered_units: 0, unit_price: 0, gst_rate: 18 }])
+  const [soLines, setSOLines] = useState<any[]>([])
+  const [soLinesLoading, setSOLinesLoading] = useState(false)
+  const [viewPLId, setViewPLId] = useState<string | null>(null)
   const { profile } = useAuth()
   const supabase = createClient()
   const canWrite = canEdit(profile?.role ?? '', 'sales')
@@ -45,6 +48,20 @@ export default function SalesOrdersPage() {
     setCustomers(custs ?? [])
     setSkus(skuList ?? [])
     setLoading(false)
+  }
+
+  async function openViewOrder(so: SalesOrder) {
+    setViewOrder(so)
+    setSOLines([])
+    setViewPLId(null)
+    setSOLinesLoading(true)
+    const [{ data: lines }, { data: pl }] = await Promise.all([
+      supabase.from('so_lines').select('*, skus(display_name, sku_code)').eq('so_id', so.id).order('sort_order'),
+      supabase.from('packing_lists').select('id, pl_number, status').eq('so_id', so.id).maybeSingle(),
+    ])
+    setSOLines(lines ?? [])
+    setViewPLId(pl?.id ?? null)
+    setSOLinesLoading(false)
   }
 
   function addLine() {
@@ -200,7 +217,7 @@ export default function SalesOrdersPage() {
                         <td><StatusBadge status={so.status} /></td>
                         <td>
                           <div className="flex justify-end gap-1">
-                            <button onClick={() => setViewOrder(so)} className="btn-ghost btn-sm" title="View"><Eye className="w-4 h-4" /></button>
+                            <button onClick={() => openViewOrder(so)} className="btn-ghost btn-sm" title="View"><Eye className="w-4 h-4" /></button>
                             {so.status === 'proforma_sent' && canWrite && (
                               <button onClick={() => setApproveItem(so)} className="btn-primary btn-sm">
                                 <CheckCircle className="w-3.5 h-3.5" /> Approve
@@ -288,6 +305,90 @@ export default function SalesOrdersPage() {
               <button onClick={saveSO} className="btn-primary" disabled={saving}>{saving ? 'Creating...' : 'Create SO & Generate Proforma'}</button>
             </div>
           </div>
+        </Modal>
+
+        {/* View SO modal */}
+        <Modal open={!!viewOrder} onClose={() => setViewOrder(null)} title={`Sales Order — ${viewOrder?.so_number}`} size="lg">
+          {viewOrder && (
+            <div className="space-y-5">
+              {/* Header info */}
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div className="space-y-2">
+                  <div><span className="text-slate-400">Customer</span><p className="font-medium">{(viewOrder.customer as any)?.name}</p></div>
+                  <div><span className="text-slate-400">SO Date</span><p className="font-medium">{formatDate(viewOrder.so_date)}</p></div>
+                  {viewOrder.proforma_number && <div><span className="text-slate-400">Proforma #</span><p className="font-mono text-sm">{viewOrder.proforma_number}</p></div>}
+                </div>
+                <div className="space-y-2">
+                  <div><span className="text-slate-400">Status</span><div className="mt-0.5"><StatusBadge status={viewOrder.status} /></div></div>
+                  {viewOrder.delivery_address && <div><span className="text-slate-400">Delivery Address</span><p className="font-medium">{viewOrder.delivery_address}</p></div>}
+                  {viewOrder.notes && <div><span className="text-slate-400">Notes</span><p className="text-slate-600">{viewOrder.notes}</p></div>}
+                </div>
+              </div>
+
+              {/* Packing list link */}
+              {viewPLId && (
+                <div className="flex items-center gap-2 p-3 bg-brand-50 rounded-lg border border-brand-100">
+                  <FileText className="w-4 h-4 text-brand-600" />
+                  <span className="text-sm text-brand-700">Packing list created for this order.</span>
+                  <a href={`/sales/packing/${viewPLId}`} className="ml-auto btn-primary btn-sm">Open Packing List →</a>
+                </div>
+              )}
+
+              {/* Line items */}
+              <div>
+                <h4 className="text-sm font-semibold text-slate-700 mb-2">Line Items</h4>
+                {soLinesLoading ? (
+                  <div className="text-center py-6 text-slate-400 text-sm">Loading lines...</div>
+                ) : (
+                  <div className="rounded-xl border border-slate-200 overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-slate-50">
+                        <tr>
+                          <th className="px-3 py-2 text-left text-xs font-semibold text-slate-500">SKU</th>
+                          <th className="px-3 py-2 text-center text-xs font-semibold text-slate-500">Boxes</th>
+                          <th className="px-3 py-2 text-center text-xs font-semibold text-slate-500">Units</th>
+                          <th className="px-3 py-2 text-right text-xs font-semibold text-slate-500">Unit Price</th>
+                          <th className="px-3 py-2 text-right text-xs font-semibold text-slate-500">GST</th>
+                          <th className="px-3 py-2 text-right text-xs font-semibold text-slate-500">Amount</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {soLines.map((line: any) => {
+                          const lineAmt = line.ordered_units * line.unit_price
+                          const lineGST = lineAmt * line.gst_rate / 100
+                          return (
+                            <tr key={line.id} className="hover:bg-slate-50">
+                              <td className="px-3 py-2">
+                                <p className="font-medium text-slate-900">{line.skus?.display_name}</p>
+                                <p className="text-xs text-slate-400 font-mono">{line.skus?.sku_code}</p>
+                              </td>
+                              <td className="px-3 py-2 text-center">{line.ordered_boxes}</td>
+                              <td className="px-3 py-2 text-center">{line.ordered_units}</td>
+                              <td className="px-3 py-2 text-right font-mono">{formatCurrency(line.unit_price)}</td>
+                              <td className="px-3 py-2 text-right text-slate-500">{line.gst_rate}%</td>
+                              <td className="px-3 py-2 text-right font-semibold">{formatCurrency(lineAmt + lineGST)}</td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* Totals */}
+              <div className="bg-slate-50 rounded-xl p-4 space-y-1.5 text-sm">
+                <div className="flex justify-between"><span className="text-slate-500">Subtotal</span><span className="font-medium">{formatCurrency(viewOrder.total_amount)}</span></div>
+                <div className="flex justify-between"><span className="text-slate-500">Total GST</span><span className="font-medium">{formatCurrency(viewOrder.total_gst)}</span></div>
+                <div className="flex justify-between pt-1.5 border-t border-slate-200"><span className="font-semibold">Grand Total</span><span className="font-bold text-base">{formatCurrency(viewOrder.grand_total)}</span></div>
+              </div>
+
+              <div className="flex justify-end gap-2">
+                <button onClick={() => window.print()} className="btn-secondary btn-sm"><Printer className="w-4 h-4" /> Print</button>
+                <button onClick={() => setViewOrder(null)} className="btn-primary btn-sm">Close</button>
+              </div>
+            </div>
+          )}
         </Modal>
 
         {/* Approve confirm */}
