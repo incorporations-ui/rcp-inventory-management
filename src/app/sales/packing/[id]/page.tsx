@@ -3,7 +3,12 @@ import { useState, useEffect, use } from 'react'
 import { createClient } from '@/lib/supabase'
 import AppLayout from '@/components/layout/AppLayout'
 import { PageGuard, StatusBadge, PageLoader, Modal, ConfirmDialog } from '@/components/ui'
-import { QRScanner } from '@/components/ui/QRComponents'
+import dynamic from 'next/dynamic'
+
+const QRScanner = dynamic(
+  () => import('@/components/ui/QRComponents').then((mod) => mod.QRScanner),
+  { ssr: false } // This prevents the ref/camera logic from running on the server
+)
 import { useAuth } from '@/hooks/useAuth'
 import { formatDate, formatCurrency, parseQRData } from '@/lib/utils'
 import { CheckCircle, XCircle, AlertTriangle, PackageCheck, Printer, ArrowLeft } from 'lucide-react'
