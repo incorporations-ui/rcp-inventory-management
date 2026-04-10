@@ -172,7 +172,6 @@ export default function SalesOrdersPage() {
 
   const filtered = orders.filter(o =>
     o.so_number.toLowerCase().includes(search.toLowerCase()) ||
-    (o.customer as any)?.name?.toLowerCase().includes(search.toLowerCase()) ||
     (o.customer as any)?.name?.toLowerCase().includes(search.toLowerCase())
   )
 

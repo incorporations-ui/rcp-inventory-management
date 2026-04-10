@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase'
 import AppLayout from '@/components/layout/AppLayout'
 import { PageGuard, StatusBadge, PageLoader, SearchInput, Modal, FormField, ConfirmDialog } from '@/components/ui'
 import { useAuth } from '@/hooks/useAuth'
-import { formatDate, formatCurrency, canEdit } from '@/lib/utils'
+import { formatDate, canEdit } from '@/lib/utils'
 import { Plus, Trash2, Lock, Unlock, ShoppingCart, CheckSquare, Square, AlertTriangle, Calendar, User } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useRouter } from 'next/navigation'
@@ -103,8 +103,6 @@ export default function ReservationsPage() {
     if (error) toast.error(error.message)
     else {
       // Un-reserve from stock master
-      await supabase.from('stock_master').update({ reserved_units: supabase.rpc('greatest', { a: 0, b: -res.reserved_units }) }).eq('sku_id', res.sku_id)
-      // Simpler: direct update
       const { data: sm } = await supabase.from('stock_master').select('reserved_units').eq('sku_id', res.sku_id).single()
       if (sm) await supabase.from('stock_master').update({ reserved_units: Math.max(0, (sm.reserved_units || 0) - res.reserved_units) }).eq('sku_id', res.sku_id)
       toast.success('Reservation released')
@@ -132,7 +130,7 @@ export default function ReservationsPage() {
     if (selectedRes.length === 0) return
 
     // Group by customer — all selected must be the same customer
-    const customerIds = [...new Set(selectedRes.map(r => r.customer_id))]
+    const customerIds = Array.from(new Set(selectedRes.map(r => r.customer_id)))
     if (customerIds.length > 1) {
       toast.error('All selected reservations must be for the same customer')
       return
@@ -154,15 +152,19 @@ export default function ReservationsPage() {
 
     if (soErr || !so) { toast.error('Failed to create SO'); setConverting(false); return }
 
-    await supabase.from('so_lines').insert(selectedRes.map((r, i) => ({
+    const { error: linesErr } = await supabase.from('so_lines').insert(selectedRes.map((r, i) => ({
       so_id: so.id, sku_id: r.sku_id, ordered_boxes: 0,
       ordered_units: r.reserved_units, unit_price: 0, gst_rate: 18, sort_order: i,
     })))
 
+    if (linesErr) { toast.error('SO created but lines failed to save — please check'); setConverting(false); return }
+
     // Mark reservations as converted
-    await supabase.from('manual_reservations')
+    const { error: convErr } = await supabase.from('manual_reservations')
       .update({ status: 'converted_to_so', converted_so_id: so.id })
       .in('id', selectedRes.map(r => r.id))
+
+    if (convErr) { toast.error('SO created but reservations not marked converted — please update manually') }
 
     toast.success(`SO ${soNum} created from ${selectedRes.length} reservation${selectedRes.length !== 1 ? 's' : ''}`)
     setSelected(new Set())
@@ -180,7 +182,7 @@ export default function ReservationsPage() {
     return matchSearch && matchStatus
   })
 
-  const selectedActive = [...selected].filter(id => reservations.find(r => r.id === id)?.status === 'active')
+  const selectedActive = Array.from(selected).filter(id => reservations.find(r => r.id === id)?.status === 'active')
   const allActiveSelected = filtered.filter(r => r.status === 'active').every(r => selected.has(r.id))
     && filtered.filter(r => r.status === 'active').length > 0
 
