@@ -133,32 +133,66 @@ export default function SalesOrdersPage() {
   async function approveSO(so: SalesOrder) {
     setApproving(true)
     // Reserve stock for each line
-    const { data: soLines } = await supabase.from('so_lines').select('*').eq('so_id', so.id)
+    const { data: soLines, error: soLinesError } = await supabase
+  .from('so_lines')
+  .select('*')
+  .eq('so_id', so.id);
 
-    for (const line of soLines ?? []) {
-      // Check available stock
-      const { data: sm } = await supabase.from('stock_master').select('available_units').eq('sku_id', line.sku_id).single()
-      if ((sm?.available_units ?? 0) < line.ordered_units) {
-        const sku = skus.find(s => s.id === line.sku_id)
-        toast.error(`Insufficient stock for ${sku?.display_name}. Available: ${sm?.available_units ?? 0}`)
-        setApproving(false); return
-      }
-      await supabase.rpc('reserve_stock', { p_sku_id: line.sku_id, p_units: line.ordered_units })
-    }
+if (soLinesError) {
+  toast.error('Failed to fetch SO lines: ' + soLinesError.message);
+  setApproving(false);
+  return;
+}
 
-    // Create packing list
-    const { data: plNum } = await supabase.rpc('next_doc_number', { p_doc_type: 'PL' })
-    const { data: pl } = await supabase.from('packing_lists').insert({
-      pl_number: plNum, so_id: so.id, status: 'pending'
-    }).select().single()
+if (!soLines || soLines.length === 0) {
+  toast.error('No Sales Order lines found.');
+  setApproving(false);
+  return;
+}
 
-    if (pl) {
-      const plLines = (soLines ?? []).map(l => ({
-        packing_list_id: pl.id, so_line_id: l.id, sku_id: l.sku_id,
-        ordered_units: l.ordered_units, status: 'pending'
-      }))
-      await supabase.from('packing_list_lines').insert(plLines)
-    }
+const { data: plNum, error: plNumError } = await supabase
+  .rpc('next_doc_number', { p_doc_type: 'PL' });
+
+if (plNumError) {
+  toast.error(plNumError.message);
+  setApproving(false);
+  return;
+}
+
+const { data: pl, error: plError } = await supabase
+  .from('packing_lists')
+  .insert({
+    pl_number: plNum,
+    so_id: so.id,
+    status: 'pending'
+  })
+  .select()
+  .single();
+
+if (plError || !pl) {
+  toast.error('Failed to create Packing List: ' + plError?.message);
+  setApproving(false);
+  return;
+}
+
+const plLines = soLines.map(l => ({
+  packing_list_id: pl.id,
+  so_line_id: l.id,
+  sku_id: l.sku_id,
+  ordered_units: l.ordered_units,
+  packed_units: 0,
+  status: 'pending'
+}));
+
+const { error: plLinesError } = await supabase
+  .from('packing_list_lines')
+  .insert(plLines);
+
+if (plLinesError) {
+  toast.error('Failed to create Packing List lines: ' + plLinesError.message);
+  setApproving(false);
+  return;
+}
 
     await supabase.from('sales_orders').update({
       status: 'approved', approved_by: profile?.id, approved_at: new Date().toISOString()
