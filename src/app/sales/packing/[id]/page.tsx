@@ -11,14 +11,16 @@ import {
 } from '@/components/ui'
 import { QRScanner } from '@/components/ui/QRComponents'
 import { useAuth } from '@/hooks/useAuth'
-import { parseQRData } from '@/lib/utils'
+import { parseQRData, formatCurrency } from '@/lib/utils'
 import {
   CheckCircle,
   XCircle,
   PackageCheck,
   Printer,
   ArrowLeft,
-  AlertTriangle
+  AlertTriangle,
+  FileText,
+  ExternalLink
 } from 'lucide-react'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
@@ -34,6 +36,7 @@ export default function PackingListDetailPage({
 
   const [pl, setPL] = useState<any>(null)
   const [lines, setLines] = useState<any[]>([])
+  const [invoice, setInvoice] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [finalizing, setFinalizing] = useState(false)
   const [mismatchLine, setMismatchLine] = useState<any>(null)
@@ -82,6 +85,16 @@ export default function PackingListDetailPage({
 
       setPL(plData)
       setLines(lineData || [])
+
+      // If already finalized, fetch the generated invoice
+      if (plData?.status === 'finalized') {
+        const { data: invData } = await supabase
+          .from('invoices')
+          .select('id, invoice_number, grand_total, payment_status, dispatch_status')
+          .eq('packing_list_id', id)
+          .maybeSingle()
+        setInvoice(invData ?? null)
+      }
     } catch (error: any) {
       toast.error(error.message || 'Failed to load packing list')
     } finally {
@@ -177,31 +190,88 @@ export default function PackingListDetailPage({
   async function finalizePL() {
     const pending = lines.filter((l) => l.status === 'pending')
     if (pending.length > 0) {
-      toast.error('Complete packing before finalizing')
+      toast.error('Complete all lines before finalizing — mark each as Packed or Unavailable')
+      return
+    }
+
+    const packedLines = lines.filter((l) => l.status === 'packed')
+    if (packedLines.length === 0) {
+      toast.error('No packed lines — cannot generate invoice')
       return
     }
 
     setFinalizing(true)
     try {
-      for (const line of lines.filter((l) => l.status === 'packed')) {
+      // 1. Deduct stock for packed lines (FIFO via RPC)
+      for (const line of packedLines) {
         await supabase.rpc('update_stock_master', {
           p_sku_id: line.sku_id,
           p_delta: -line.packed_units
         })
       }
 
+      // 2. Mark packing list as finalized
       await supabase
         .from('packing_lists')
-        .update({
-          status: 'finalized',
-          finalized_at: new Date().toISOString()
-        })
+        .update({ status: 'finalized', finalized_at: new Date().toISOString() })
         .eq('id', pl.id)
 
-      toast.success('Packing list finalized successfully!')
+      // 3. Generate invoice number
+      const { data: invNum, error: invNumErr } = await supabase
+        .rpc('next_doc_number', { p_doc_type: 'INV' })
+      if (invNumErr) throw new Error('Could not generate invoice number: ' + invNumErr.message)
+
+      // 4. Calculate invoice totals from packed lines only
+      const subtotal = packedLines.reduce(
+        (s, l) => s + l.packed_units * l.unit_price, 0
+      )
+      const totalGst = packedLines.reduce(
+        (s, l) => s + l.packed_units * l.unit_price * (l.skus?.gst_rate ?? 0) / 100, 0
+      )
+      const grandTotal = subtotal + totalGst
+      const so = pl.sales_orders
+
+      // 5. Create invoice record
+      const { data: inv, error: invErr } = await supabase
+        .from('invoices')
+        .insert({
+          invoice_number: invNum,
+          so_id: pl.so_id,
+          packing_list_id: pl.id,
+          customer_id: so.customer_id,
+          invoice_date: new Date().toISOString().split('T')[0],
+          subtotal,
+          total_gst: totalGst,
+          grand_total: grandTotal,
+          payment_status: 'unpaid',
+          dispatch_status: 'ready',
+        })
+        .select()
+        .single()
+
+      if (invErr || !inv) throw new Error(invErr?.message ?? 'Failed to create invoice')
+
+      // 6. Create invoice lines (packed lines only)
+      const invLines = packedLines.map((l) => ({
+        invoice_id: inv.id,
+        sku_id: l.sku_id,
+        units: l.packed_units,
+        unit_price: l.unit_price,
+        gst_rate: l.skus?.gst_rate ?? 0,
+      }))
+      const { error: invLinesErr } = await supabase.from('invoice_lines').insert(invLines)
+      if (invLinesErr) throw new Error(invLinesErr.message)
+
+      // 7. Update SO status to invoiced
+      await supabase
+        .from('sales_orders')
+        .update({ status: 'invoiced' })
+        .eq('id', pl.so_id)
+
+      toast.success(`Packing list finalized! Invoice ${invNum} generated.`)
       loadData()
     } catch (error: any) {
-      toast.error(error.message)
+      toast.error(error.message || 'Finalization failed')
     } finally {
       setFinalizing(false)
     }
@@ -258,15 +328,33 @@ export default function PackingListDetailPage({
             </div>
 
             <div className="flex items-center gap-2">
-              {pl.status === 'finalized' && (
-                <button
-                  onClick={() => window.print()}
-                  className="btn-secondary btn-sm no-print"
+              <button
+                onClick={() => window.print()}
+                className="btn-secondary btn-sm no-print"
+              >
+                <Printer className="w-4 h-4" /> Print
+              </button>
+
+              {/* ── FINALIZED: show invoice link ── */}
+              {pl.status === 'finalized' && invoice && (
+                <Link
+                  href="/sales/invoices"
+                  className="btn-primary flex items-center gap-1.5"
                 >
-                  <Printer className="w-4 h-4" /> Print
-                </button>
+                  <FileText className="w-4 h-4" />
+                  View Invoice {invoice.invoice_number}
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </Link>
               )}
 
+              {/* ── FINALIZED but invoice not found yet ── */}
+              {pl.status === 'finalized' && !invoice && (
+                <Link href="/sales/invoices" className="btn-secondary btn-sm">
+                  <FileText className="w-4 h-4" /> Go to Invoices
+                </Link>
+              )}
+
+              {/* ── READY TO FINALIZE ── */}
               {pl.status !== 'finalized' && allDone && (
                 <button
                   onClick={finalizePL}
@@ -274,11 +362,75 @@ export default function PackingListDetailPage({
                   className="btn-primary"
                 >
                   <PackageCheck className="w-4 h-4" />
-                  {finalizing ? 'Finalizing...' : 'Finalize Packing List'}
+                  {finalizing ? 'Finalizing & Generating Invoice...' : 'Finalize & Generate Invoice'}
                 </button>
               )}
             </div>
           </div>
+
+          {/* ── POST-FINALIZATION SUMMARY ── */}
+          {pl.status === 'finalized' && (() => {
+            const packed = lines.filter(l => l.status === 'packed')
+            const unavail = lines.filter(l => l.status === 'unavailable')
+            return (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* FPPL */}
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <CheckCircle className="w-5 h-5 text-emerald-600" />
+                    <h3 className="font-semibold text-emerald-800 text-sm">
+                      Final Packed Product List (FPPL)
+                    </h3>
+                    <span className="ml-auto badge bg-emerald-100 text-emerald-700">{packed.length} lines</span>
+                  </div>
+                  {packed.length === 0 ? (
+                    <p className="text-xs text-emerald-600">No items were packed.</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {packed.map(l => (
+                        <div key={l.id} className="flex justify-between text-xs">
+                          <span className="text-emerald-800 font-medium">{l.skus?.display_name ?? l.skus?.sku_code}</span>
+                          <span className="text-emerald-700 font-semibold">{l.packed_units} units</span>
+                        </div>
+                      ))}
+                      <div className="pt-2 border-t border-emerald-200 flex justify-between text-xs font-bold text-emerald-900">
+                        <span>Invoice Value</span>
+                        <span>{invoice ? formatCurrency(invoice.grand_total) : '—'}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* FUPL */}
+                <div className={`rounded-xl border p-4 ${unavail.length > 0 ? 'border-red-200 bg-red-50' : 'border-slate-200 bg-slate-50'}`}>
+                  <div className="flex items-center gap-2 mb-3">
+                    <XCircle className={`w-5 h-5 ${unavail.length > 0 ? 'text-red-500' : 'text-slate-400'}`} />
+                    <h3 className={`font-semibold text-sm ${unavail.length > 0 ? 'text-red-800' : 'text-slate-600'}`}>
+                      Final Unavailable Product List (FUPL)
+                    </h3>
+                    <span className={`ml-auto badge ${unavail.length > 0 ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-500'}`}>{unavail.length} lines</span>
+                  </div>
+                  {unavail.length === 0 ? (
+                    <p className="text-xs text-slate-500">All items were packed. ✓</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {unavail.map(l => (
+                        <div key={l.id} className="flex justify-between text-xs">
+                          <span className="text-red-800 font-medium">{l.skus?.display_name ?? l.skus?.sku_code}</span>
+                          <span className="text-red-700 font-semibold">{l.unavailable_units ?? l.ordered_units} units</span>
+                        </div>
+                      ))}
+                      {unavail.some(l => l.mismatch_notes) && (
+                        <div className="pt-2 border-t border-red-200 text-xs text-red-600 italic">
+                          ⚠ Stock mismatches flagged — review with godown manager.
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )
+          })()}
 
           {/* Line Items */}
           <div className="space-y-3">
