@@ -286,6 +286,8 @@ export interface PackingListLine {
   status: PackLineStatus
   rack_id?: string
   scanned_rack_id?: string
+  rack_picks_json?: string | null
+  packed_at?: string | null
   mismatch_flagged: boolean
   mismatch_notes?: string
   sku?: SKU
