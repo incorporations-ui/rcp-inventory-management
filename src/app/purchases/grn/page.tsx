@@ -57,6 +57,18 @@ export default function GRNPage() {
     if (expandedGrn === grnId) { setExpandedGrn(null); return }
     setExpandedGrn(grnId)
     await loadLines(grnId)
+    const grn = grns.find(g => g.id === grnId)
+    if (grn && grnNotes[grnId] === undefined) {
+      setGrnNotes(prev => ({ ...prev, [grnId]: grn.notes ?? '' }))
+    }
+  }
+
+  async function saveGrnNotes(grnId: string) {
+    setSavingGrnNotes(grnId)
+    const { error } = await supabase.from('grns').update({ notes: grnNotes[grnId] || null }).eq('id', grnId)
+    if (error) toast.error(error.message)
+    else toast.success('Notes saved')
+    setSavingGrnNotes(null)
   }
 
   async function updateLine(grnId: string, lineId: string, updates: Record<string, any>) {
@@ -103,6 +115,21 @@ export default function GRNPage() {
     if (!partialModal) return
     const ok = await updateLine(partialModal.grnId, partialModal.line.id, { status: 'received', received_boxes: partialBoxes, received_units: partialUnits, not_received_units: partialModal.line.expected_units - partialUnits })
     if (ok) { toast.success('Partial receive saved'); setPartialModal(null) }
+  }
+
+  const [cancelGrnItem, setCancelGrnItem] = useState<any>(null)
+  const [cancellingGrn, setCancellingGrn] = useState(false)
+  const [grnNotes, setGrnNotes] = useState<Record<string, string>>({})
+  const [savingGrnNotes, setSavingGrnNotes] = useState<string | null>(null)
+
+  async function cancelGRN(grn: any) {
+    if (grn.status === 'finalized') { toast.error('Cannot cancel a finalized GRN.'); setCancelGrnItem(null); return }
+    setCancellingGrn(true)
+    await supabase.from('grns').update({ status: 'cancelled' }).eq('id', grn.id)
+    // Reset PO status back to approved
+    if (grn.po_id) await supabase.from('purchase_orders').update({ status: 'approved' }).eq('id', grn.po_id)
+    toast.success(`GRN ${grn.grn_number} cancelled. PO reset to Approved.`)
+    setCancelGrnItem(null); setCancellingGrn(false); loadData()
   }
 
   async function finalizeGRN(grnId: string) {
@@ -240,6 +267,30 @@ export default function GRNPage() {
                               </div>
                             </div>
                           ))
+                        )}
+                      </div>
+
+                      {/* GRN-level notes */}
+                      <div className="px-5 py-4 border-t border-slate-100 bg-slate-50">
+                        <p className="text-xs font-semibold text-slate-600 mb-2 uppercase tracking-wider">GRN Notes</p>
+                        <textarea
+                          value={grnNotes[grn.id] ?? ''}
+                          onChange={e => setGrnNotes(prev => ({ ...prev, [grn.id]: e.target.value }))}
+                          rows={2}
+                          className="input w-full text-sm"
+                          placeholder="Vehicle number, driver name, any discrepancies observed..."
+                          disabled={grn.status === 'finalized'}
+                        />
+                        {grn.status !== 'finalized' && (
+                          <div className="flex justify-end mt-2">
+                            <button
+                              onClick={() => saveGrnNotes(grn.id)}
+                              disabled={savingGrnNotes === grn.id}
+                              className="btn-secondary btn-sm"
+                            >
+                              {savingGrnNotes === grn.id ? 'Saving...' : 'Save Notes'}
+                            </button>
+                          </div>
                         )}
                       </div>
                     )}
