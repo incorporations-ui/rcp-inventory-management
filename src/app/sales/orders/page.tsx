@@ -7,7 +7,7 @@ import { PageGuard, Modal, FormField, StatusBadge, PageLoader, EmptyState, Searc
 import { useAuth } from '@/hooks/useAuth'
 import { formatCurrency, formatDate, canEdit } from '@/lib/utils'
 import type { SalesOrder, Customer, SKU } from '@/types'
-import { Plus, Trash2, Eye, CheckCircle, FileText, Printer } from 'lucide-react'
+import { Plus, Trash2, Eye, CheckCircle, FileText, Printer, XCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 interface SOLine { sku_id: string; ordered_boxes: number; ordered_units: number; unit_price: number; gst_rate: number; sku?: SKU }
@@ -21,6 +21,8 @@ export default function SalesOrdersPage() {
   const [modalOpen, setModalOpen] = useState(false)
   const [viewOrder, setViewOrder] = useState<SalesOrder | null>(null)
   const [approveItem, setApproveItem] = useState<SalesOrder | null>(null)
+  const [cancelItem, setCancelItem] = useState<SalesOrder | null>(null)
+  const [cancelling, setCancelling] = useState(false)
   const [saving, setSaving] = useState(false)
   const [approving, setApproving] = useState(false)
   // Form state
@@ -204,6 +206,33 @@ if (plLinesError) {
     loadData()
   }
 
+  async function cancelSO(so: SalesOrder) {
+    // Block cancellation if packing is in progress or invoiced
+    const blockStatuses = ['packing_in_progress', 'packed', 'invoiced', 'dispatched']
+    if (blockStatuses.includes(so.status)) {
+      toast.error(`Cannot cancel an SO with status "${so.status}". Void the invoice first.`)
+      setCancelling(false)
+      setCancelItem(null)
+      return
+    }
+    setCancelling(true)
+    // Release stock reservation if SO was approved
+    if (so.status === 'approved') {
+      const { data: soLines } = await supabase.from('so_lines').select('sku_id, ordered_units').eq('so_id', so.id)
+      for (const line of soLines ?? []) {
+        await supabase.rpc('update_stock_master', { p_sku_id: line.sku_id, p_delta: line.ordered_units })
+          .then(({ error }) => { if (error) console.warn('Unreserve warning:', error.message) })
+      }
+      // Cancel any open packing list
+      await supabase.from('packing_lists').update({ status: 'cancelled' }).eq('so_id', so.id).eq('status', 'pending')
+    }
+    await supabase.from('sales_orders').update({ status: 'cancelled' }).eq('id', so.id)
+    toast.success(`SO ${so.so_number} cancelled`)
+    setCancelItem(null)
+    setCancelling(false)
+    loadData()
+  }
+
   const filtered = orders.filter(o =>
     o.so_number.toLowerCase().includes(search.toLowerCase()) ||
     (o.customer as any)?.name?.toLowerCase().includes(search.toLowerCase())
@@ -254,6 +283,11 @@ if (plLinesError) {
                             {so.status === 'proforma_sent' && canWrite && (
                               <button onClick={() => setApproveItem(so)} className="btn-primary btn-sm">
                                 <CheckCircle className="w-3.5 h-3.5" /> Approve
+                              </button>
+                            )}
+                            {!['cancelled','invoiced','dispatched'].includes(so.status) && canWrite && (
+                              <button onClick={() => setCancelItem(so)} className="btn-ghost btn-sm text-red-500 hover:bg-red-50" title="Cancel SO">
+                                <XCircle className="w-3.5 h-3.5" />
                               </button>
                             )}
                           </div>
@@ -433,6 +467,18 @@ if (plLinesError) {
           message={`Approving ${approveItem?.so_number} will reserve stock and auto-generate a Packing List. Are you sure?`}
           confirmLabel="Approve & Create Packing List"
           loading={approving}
+        />
+
+        {/* Cancel confirm */}
+        <ConfirmDialog
+          open={!!cancelItem}
+          onClose={() => setCancelItem(null)}
+          onConfirm={() => cancelItem && cancelSO(cancelItem)}
+          title="Cancel Sales Order"
+          message={`Cancel SO ${cancelItem?.so_number}? This will release any stock reservations and cancel the pending packing list. This cannot be undone.`}
+          confirmLabel="Yes, Cancel SO"
+          danger
+          loading={cancelling}
         />
       </PageGuard>
     </AppLayout>
