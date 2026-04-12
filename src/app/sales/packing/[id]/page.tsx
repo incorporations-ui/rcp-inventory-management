@@ -288,8 +288,6 @@ export default function PackingListDetailPage({ params }: { params: { id: string
         invoice_id: inv.id, sku_id: l.sku_id, units: l.packed_units,
         unit_price: price, gst_rate: gstRate,
         hsn_code: l.skus?.hsn_code ?? null,
-        line_amount: lineAmt,
-        line_gst: +(lineAmt * gstRate / 100).toFixed(2),
       }
     })
     const { error: lErr } = await supabase.from('invoice_lines').insert(invLines)
