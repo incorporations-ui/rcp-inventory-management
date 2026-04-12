@@ -6,7 +6,7 @@ import { PageGuard, Modal, FormField, StatusBadge, PageLoader, SearchInput, Conf
 import { useAuth } from '@/hooks/useAuth'
 import { formatCurrency, formatDate, canEdit } from '@/lib/utils'
 import type { PurchaseOrder, Supplier, SKU } from '@/types'
-import { Plus, Trash2, Eye, CheckCircle, PackageCheck } from 'lucide-react'
+import { Plus, Trash2, Eye, CheckCircle, PackageCheck, XCircle } from 'lucide-react'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
 
@@ -18,6 +18,8 @@ export default function PurchaseOrdersPage() {
   const [search, setSearch] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
   const [approveItem, setApproveItem] = useState<PurchaseOrder | null>(null)
+  const [cancelItem, setCancelItem] = useState<PurchaseOrder | null>(null)
+  const [cancelling, setCancelling] = useState(false)
   const [saving, setSaving] = useState(false)
   const [approving, setApproving] = useState(false)
   const [supplierId, setSupplierId] = useState('')
@@ -85,6 +87,18 @@ export default function PurchaseOrdersPage() {
     setApproveItem(null); setApproving(false); loadData()
   }
 
+  async function cancelPO(po: PurchaseOrder) {
+    const blockStatuses = ['grn_in_progress', 'fully_received']
+    if (blockStatuses.includes(po.status)) {
+      toast.error(`Cannot cancel a PO with status "${po.status}". GRN is already in progress.`)
+      setCancelItem(null); return
+    }
+    setCancelling(true)
+    await supabase.from('purchase_orders').update({ status: 'cancelled' }).eq('id', po.id)
+    toast.success(`PO ${po.po_number} cancelled`)
+    setCancelItem(null); setCancelling(false); loadData()
+  }
+
   async function startGRN(po: PurchaseOrder) {
     const { data: grnNum } = await supabase.rpc('next_doc_number', { p_doc_type: 'GRN' })
     const { data: grn, error } = await supabase.from('grns').insert({
@@ -140,6 +154,11 @@ export default function PurchaseOrdersPage() {
                             )}
                             {po.status === 'approved' && canWrite && (
                               <button onClick={() => startGRN(po)} className="btn-secondary btn-sm"><PackageCheck className="w-3.5 h-3.5" /> Start GRN</button>
+                            )}
+                            {!['cancelled','grn_in_progress','fully_received'].includes(po.status) && canWrite && (
+                              <button onClick={() => setCancelItem(po)} className="btn-ghost btn-sm text-red-500 hover:bg-red-50" title="Cancel PO">
+                                <XCircle className="w-3.5 h-3.5" />
+                              </button>
                             )}
                           </div>
                         </td>
@@ -202,6 +221,7 @@ export default function PurchaseOrdersPage() {
         </Modal>
 
         <ConfirmDialog open={!!approveItem} onClose={() => setApproveItem(null)} onConfirm={() => approveItem && approvePO(approveItem)} title="Approve Purchase Order" message={`Approve ${approveItem?.po_number}?`} confirmLabel="Approve" loading={approving} />
+        <ConfirmDialog open={!!cancelItem} onClose={() => setCancelItem(null)} onConfirm={() => cancelItem && cancelPO(cancelItem)} title="Cancel Purchase Order" message={`Cancel PO ${cancelItem?.po_number}? This cannot be undone.`} confirmLabel="Yes, Cancel PO" danger loading={cancelling} />
       </PageGuard>
     </AppLayout>
   )
