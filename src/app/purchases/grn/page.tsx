@@ -35,7 +35,7 @@ export default function GRNPage() {
     setLoading(true)
     const { data, error } = await supabase
       .from('grns')
-      .select('id, grn_number, grn_date, status, po_id, purchase_orders ( po_number, suppliers ( name ) ), grn_lines ( id, status )')
+      .select('id, grn_number, grn_date, status, po_id, purchase_orders ( po_number, suppliers ( name ) ), grn_lines ( id, status )'))
       .order('created_at', { ascending: false })
     if (error) toast.error('Failed to load GRNs: ' + error.message)
     setGrns(data ?? [])
