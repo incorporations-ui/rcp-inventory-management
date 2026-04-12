@@ -34,12 +34,42 @@ export default function GRNPage() {
   async function loadData() {
     setLoading(true)
     const { data, error } = await supabase
+    const loadData = async () => {
+  try {
+    setLoading(true);
+
+    const { data, error } = await supabase
       .from('grns')
-      .select('id, grn_number, grn_date, status, po_id, purchase_orders ( po_number, suppliers ( name ) ), grn_lines ( id, status )'))
-      .order('created_at', { ascending: false })
-    if (error) toast.error('Failed to load GRNs: ' + error.message)
-    setGrns(data ?? [])
-    setLoading(false)
+      .select(`
+        id,
+        grn_number,
+        grn_date,
+        status,
+        po_id,
+        purchase_orders (
+          po_number,
+          suppliers (
+            name
+          )
+        ),
+        grn_lines (
+          id,
+          status
+        )
+      `)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      throw error;
+    }
+
+    setGrns(data ?? []);
+  } catch (err: any) {
+    toast.error(`Failed to load GRNs: ${err.message}`);
+  } finally {
+    setLoading(false);
+  }
+};
   }
 
   const loadLines = useCallback(async (grnId: string) => {
