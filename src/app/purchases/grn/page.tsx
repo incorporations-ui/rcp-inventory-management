@@ -22,6 +22,10 @@ export default function GRNPage() {
   const [damageModal, setDamageModal] = useState<{ grnId: string; line: any } | null>(null)
   const [damageNotes, setDamageNotes] = useState('')
   const [damagedUnits, setDamagedUnits] = useState(0)
+  const [cancelGrnItem, setCancelGrnItem] = useState<any>(null)
+  const [cancellingGrn, setCancellingGrn] = useState(false)
+  const [grnNotes, setGrnNotes] = useState<Record<string, string>>({})
+  const [savingGrnNotes, setSavingGrnNotes] = useState<string | null>(null)
   const { profile } = useAuth()
   const supabase = createClient()
 
@@ -116,11 +120,6 @@ export default function GRNPage() {
     const ok = await updateLine(partialModal.grnId, partialModal.line.id, { status: 'received', received_boxes: partialBoxes, received_units: partialUnits, not_received_units: partialModal.line.expected_units - partialUnits })
     if (ok) { toast.success('Partial receive saved'); setPartialModal(null) }
   }
-
-  const [cancelGrnItem, setCancelGrnItem] = useState<any>(null)
-  const [cancellingGrn, setCancellingGrn] = useState(false)
-  const [grnNotes, setGrnNotes] = useState<Record<string, string>>({})
-  const [savingGrnNotes, setSavingGrnNotes] = useState<string | null>(null)
 
   async function cancelGRN(grn: any) {
     if (grn.status === 'finalized') { toast.error('Cannot cancel a finalized GRN.'); setCancelGrnItem(null); return }
