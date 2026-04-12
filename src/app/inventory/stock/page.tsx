@@ -37,7 +37,7 @@ export default function StockMasterPage() {
     s.display_name?.toLowerCase().includes(search.toLowerCase())
   )
 
-  const totalValue = stock.reduce((s, r) => s + ((r.available_units ?? 0) * 0), 0)
+  const totalAvailable = stock.reduce((s, r) => s + (r.available_units ?? 0), 0)
 
   return (
     <AppLayout>
