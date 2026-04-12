@@ -67,7 +67,8 @@ export default function PackingListDetailPage({
             .from('packing_list_lines')
             .select(`
               *,
-              skus(display_name, sku_code, gst_rate),
+              skus(display_name, sku_code, gst_rate, hsn_code),
+              so_lines!packing_list_lines_so_line_id_fkey(unit_price, gst_rate),
               rack:racks!packing_list_lines_rack_id_fkey(rack_id_display),
               scanned_rack:racks!packing_list_lines_scanned_rack_id_fkey(rack_id_display),
               stock_master(
@@ -190,88 +191,98 @@ export default function PackingListDetailPage({
   async function finalizePL() {
     const pending = lines.filter((l) => l.status === 'pending')
     if (pending.length > 0) {
-      toast.error('Complete all lines before finalizing — mark each as Packed or Unavailable')
+      toast.error('Mark all lines as Packed or Unavailable before finalizing')
       return
     }
-
     const packedLines = lines.filter((l) => l.status === 'packed')
     if (packedLines.length === 0) {
       toast.error('No packed lines — cannot generate invoice')
       return
     }
-
     setFinalizing(true)
     try {
-      // 1. Deduct stock for packed lines (FIFO via RPC)
+      // 1. Deduct stock — non-fatal, log warning if it fails
       for (const line of packedLines) {
-        await supabase.rpc('update_stock_master', {
-          p_sku_id: line.sku_id,
-          p_delta: -line.packed_units
+        const { error: stockErr } = await supabase.rpc('update_stock_master', {
+          p_sku_id: line.sku_id, p_delta: -line.packed_units
         })
+        if (stockErr) console.warn('Stock deduction warning for', line.sku_id, stockErr.message)
       }
-
-      // 2. Mark packing list as finalized
-      await supabase
-        .from('packing_lists')
-        .update({ status: 'finalized', finalized_at: new Date().toISOString() })
-        .eq('id', pl.id)
-
-      // 3. Generate invoice number
-      const { data: invNum, error: invNumErr } = await supabase
-        .rpc('next_doc_number', { p_doc_type: 'INV' })
-      if (invNumErr) throw new Error('Could not generate invoice number: ' + invNumErr.message)
-
-      // 4. Calculate invoice totals from packed lines only
-      const subtotal = packedLines.reduce(
-        (s, l) => s + l.packed_units * l.unit_price, 0
-      )
-      const totalGst = packedLines.reduce(
-        (s, l) => s + l.packed_units * l.unit_price * (l.skus?.gst_rate ?? 0) / 100, 0
-      )
-      const grandTotal = subtotal + totalGst
-      const so = pl.sales_orders
-
-      // 5. Create invoice record
-      const { data: inv, error: invErr } = await supabase
-        .from('invoices')
-        .insert({
-          invoice_number: invNum,
-          so_id: pl.so_id,
-          packing_list_id: pl.id,
-          customer_id: so.customer_id,
-          invoice_date: new Date().toISOString().split('T')[0],
-          subtotal,
-          total_gst: totalGst,
-          grand_total: grandTotal,
-          payment_status: 'unpaid',
-          dispatch_status: 'ready',
-        })
-        .select()
-        .single()
-
-      if (invErr || !inv) throw new Error(invErr?.message ?? 'Failed to create invoice')
-
-      // 6. Create invoice lines (packed lines only)
-      const invLines = packedLines.map((l) => ({
-        invoice_id: inv.id,
-        sku_id: l.sku_id,
-        units: l.packed_units,
-        unit_price: l.unit_price,
-        gst_rate: l.skus?.gst_rate ?? 0,
-      }))
-      const { error: invLinesErr } = await supabase.from('invoice_lines').insert(invLines)
-      if (invLinesErr) throw new Error(invLinesErr.message)
-
-      // 7. Update SO status to invoiced
-      await supabase
-        .from('sales_orders')
-        .update({ status: 'invoiced' })
-        .eq('id', pl.so_id)
-
-      toast.success(`Packing list finalized! Invoice ${invNum} generated.`)
+      // 2. Mark PL finalized
+      const { error: plErr } = await supabase.from('packing_lists')
+        .update({ status: 'finalized', finalized_at: new Date().toISOString() }).eq('id', pl.id)
+      if (plErr) throw new Error(plErr.message)
+      // 3. Create invoice
+      await generateInvoiceFromLines(packedLines)
+      toast.success('Packing list finalized & invoice generated!')
       loadData()
     } catch (error: any) {
       toast.error(error.message || 'Finalization failed')
+    } finally {
+      setFinalizing(false)
+    }
+  }
+
+  // Shared invoice creation — called by finalizePL and retryGenerateInvoice
+  async function generateInvoiceFromLines(packedLines: any[]) {
+    const { data: invNum, error: invNumErr } = await supabase.rpc('next_doc_number', { p_doc_type: 'INV' })
+    if (invNumErr) throw new Error('Invoice number error: ' + invNumErr.message)
+
+    // unit_price comes from so_lines join — NOT from packing_list_lines directly
+    const subtotal = packedLines.reduce((s, l) => {
+      const price = Number(l.so_lines?.unit_price ?? 0)
+      return s + l.packed_units * price
+    }, 0)
+    const totalGst = packedLines.reduce((s, l) => {
+      const price = Number(l.so_lines?.unit_price ?? 0)
+      const gst = Number(l.so_lines?.gst_rate ?? l.skus?.gst_rate ?? 0)
+      return s + l.packed_units * price * gst / 100
+    }, 0)
+
+    const so = pl.sales_orders
+    const { data: inv, error: invErr } = await supabase.from('invoices').insert({
+      invoice_number: invNum,
+      so_id: pl.so_id,
+      packing_list_id: pl.id,
+      customer_id: so.customer_id,
+      invoice_date: new Date().toISOString().split('T')[0],
+      subtotal: +subtotal.toFixed(2),
+      total_gst: +totalGst.toFixed(2),
+      grand_total: +(subtotal + totalGst).toFixed(2),
+      payment_status: 'unpaid',
+      dispatch_status: 'ready',
+    }).select().single()
+    if (invErr || !inv) throw new Error(invErr?.message ?? 'Failed to create invoice')
+
+    const invLines = packedLines.map((l) => {
+      const price = Number(l.so_lines?.unit_price ?? 0)
+      const gstRate = Number(l.so_lines?.gst_rate ?? l.skus?.gst_rate ?? 0)
+      const lineAmt = +(l.packed_units * price).toFixed(2)
+      const lineGst = +(lineAmt * gstRate / 100).toFixed(2)
+      return {
+        invoice_id: inv.id, sku_id: l.sku_id, units: l.packed_units,
+        unit_price: price, gst_rate: gstRate,
+        hsn_code: l.skus?.hsn_code ?? null,
+        line_amount: lineAmt, line_gst: lineGst,
+      }
+    })
+    const { error: lErr } = await supabase.from('invoice_lines').insert(invLines)
+    if (lErr) throw new Error(lErr.message)
+    await supabase.from('sales_orders').update({ status: 'invoiced' }).eq('id', pl.so_id)
+    return invNum
+  }
+
+  // Retry for when PL is finalized but invoice creation had previously failed
+  async function retryGenerateInvoice() {
+    setFinalizing(true)
+    try {
+      const packedLines = lines.filter((l) => l.status === 'packed')
+      if (packedLines.length === 0) throw new Error('No packed lines found')
+      const invNum = await generateInvoiceFromLines(packedLines)
+      toast.success(`Invoice ${invNum} generated!`)
+      loadData()
+    } catch (err: any) {
+      toast.error(err.message)
     } finally {
       setFinalizing(false)
     }
@@ -347,11 +358,24 @@ export default function PackingListDetailPage({
                 </Link>
               )}
 
-              {/* ── FINALIZED but invoice not found yet ── */}
+              {/* ── FINALIZED but invoice not found yet — offer retry ── */}
               {pl.status === 'finalized' && !invoice && (
-                <Link href="/sales/invoices" className="btn-secondary btn-sm">
-                  <FileText className="w-4 h-4" /> Go to Invoices
-                </Link>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-amber-600 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-lg">
+                    ⚠ Invoice not generated yet
+                  </span>
+                  <button
+                    onClick={retryGenerateInvoice}
+                    disabled={finalizing}
+                    className="btn-primary btn-sm"
+                  >
+                    <FileText className="w-4 h-4" />
+                    {finalizing ? 'Generating...' : 'Generate Invoice Now'}
+                  </button>
+                  <Link href="/sales/invoices" className="btn-secondary btn-sm">
+                    Go to Invoices
+                  </Link>
+                </div>
               )}
 
               {/* ── READY TO FINALIZE ── */}
