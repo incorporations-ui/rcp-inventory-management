@@ -3,26 +3,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { createClient } from '@/lib/supabase';
 import AppLayout from '@/components/layout/AppLayout';
-import {
-  PageGuard,
-  StatusBadge,
-  PageLoader,
-  SearchInput,
-  Modal,
-  FormField,
-} from '@/components/ui';
+import { PageGuard, PageLoader, SearchInput, StatusBadge } from '@/components/ui';
 import { useAuth } from '@/hooks/useAuth';
 import { formatDate } from '@/lib/utils';
-import {
-  PackageCheck,
-  ChevronDown,
-  ChevronRight,
-  CheckCircle,
-  XCircle,
-  AlertTriangle,
-  Edit2,
-  RotateCcw,
-} from 'lucide-react';
+import { ChevronDown, ChevronRight, PackageCheck } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function GRNPage() {
@@ -30,34 +14,21 @@ export default function GRNPage() {
   const { profile } = useAuth();
 
   const [grns, setGrns] = useState<any[]>([]);
+  const [grnLines, setGrnLines] = useState<Record<string, any[]>>({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [expandedGrn, setExpandedGrn] = useState<string | null>(null);
-  const [grnLines, setGrnLines] = useState<Record<string, any[]>>({});
   const [linesLoading, setLinesLoading] = useState<Record<string, boolean>>({});
   const [finalizing, setFinalizing] = useState<string | null>(null);
-  const [grnNotes, setGrnNotes] = useState<Record<string, string>>({});
-  const [savingGrnNotes, setSavingGrnNotes] = useState<string | null>(null);
-
-  const [partialModal, setPartialModal] = useState<{ grnId: string; line: any } | null>(null);
-  const [partialBoxes, setPartialBoxes] = useState(0);
-  const [partialUnits, setPartialUnits] = useState(0);
-
-  const [damageModal, setDamageModal] = useState<{ grnId: string; line: any } | null>(null);
-  const [damageNotes, setDamageNotes] = useState('');
-  const [damagedUnits, setDamagedUnits] = useState(0);
-
-  const [cancelGrnItem, setCancelGrnItem] = useState<any>(null);
-  const [cancellingGrn, setCancellingGrn] = useState(false);
 
   useEffect(() => {
-    loadData();
+    loadGRNs();
   }, []);
 
   /* ================================
-     LOAD GRN DATA
+     LOAD GRNs
   ================================= */
-  async function loadData() {
+  async function loadGRNs() {
     try {
       setLoading(true);
 
@@ -69,7 +40,6 @@ export default function GRNPage() {
           grn_date,
           status,
           po_id,
-          notes,
           purchase_orders (
             po_number,
             suppliers (
@@ -85,43 +55,55 @@ export default function GRNPage() {
 
       if (error) throw error;
 
-      setGrns(data ?? []);
-    } catch (err: any) {
-      toast.error(`Failed to load GRNs: ${err.message}`);
+      setGrns(data || []);
+    } catch (error: any) {
+      toast.error(`Failed to load GRNs: ${error.message}`);
     } finally {
       setLoading(false);
     }
   }
 
   /* ================================
-     LOAD GRN LINE ITEMS
+     LOAD GRN LINES
   ================================= */
   const loadLines = useCallback(async (grnId: string) => {
-    setLinesLoading(prev => ({ ...prev, [grnId]: true }));
+    setLinesLoading((prev) => ({ ...prev, [grnId]: true }));
 
     const { data, error } = await supabase
       .from('grn_lines')
       .select(`
-        id, grn_id, po_line_id, sku_id,
-        expected_boxes, expected_units,
-        received_boxes, received_units,
-        damaged_units, not_received_units,
-        status, damage_notes,
-        unit_price, gst_rate, sort_order,
-        skus ( display_name, sku_code, units_per_box )
+        id,
+        grn_id,
+        sku_id,
+        expected_boxes,
+        expected_units,
+        received_boxes,
+        received_units,
+        damaged_units,
+        not_received_units,
+        status,
+        unit_price,
+        skus (
+          display_name,
+          sku_code,
+          units_per_box
+        )
       `)
       .eq('grn_id', grnId)
-      .order('sort_order');
+      .order('id');
 
     if (error) {
-      toast.error('Failed to load lines: ' + error.message);
+      toast.error('Failed to load GRN lines');
     } else {
-      setGrnLines(prev => ({ ...prev, [grnId]: data ?? [] }));
+      setGrnLines((prev) => ({ ...prev, [grnId]: data || [] }));
     }
 
-    setLinesLoading(prev => ({ ...prev, [grnId]: false }));
+    setLinesLoading((prev) => ({ ...prev, [grnId]: false }));
   }, [supabase]);
 
+  /* ================================
+     TOGGLE EXPANSION
+  ================================= */
   async function toggleExpand(grnId: string) {
     if (expandedGrn === grnId) {
       setExpandedGrn(null);
@@ -129,198 +111,134 @@ export default function GRNPage() {
     }
 
     setExpandedGrn(grnId);
-    await loadLines(grnId);
-
-    const grn = grns.find(g => g.id === grnId);
-    if (grn && grnNotes[grnId] === undefined) {
-      setGrnNotes(prev => ({ ...prev, [grnId]: grn.notes ?? '' }));
+    if (!grnLines[grnId]) {
+      await loadLines(grnId);
     }
   }
 
-  async function saveGrnNotes(grnId: string) {
-    setSavingGrnNotes(grnId);
-
-    const { error } = await supabase
-      .from('grns')
-      .update({ notes: grnNotes[grnId] || null })
-      .eq('id', grnId);
-
-    if (error) toast.error(error.message);
-    else toast.success('Notes saved');
-
-    setSavingGrnNotes(null);
-  }
-
   /* ================================
-     LINE OPERATIONS
+     UPDATE LINE STATUS
   ================================= */
-  async function updateLine(grnId: string, lineId: string, updates: Record<string, any>) {
+  async function updateLine(
+    grnId: string,
+    line: any,
+    status: string
+  ) {
+    let updates: any = { status };
+
+    if (status === 'received') {
+      updates.received_boxes = line.expected_boxes;
+      updates.received_units = line.expected_units;
+    }
+
+    if (status === 'not_received') {
+      updates.received_boxes = 0;
+      updates.received_units = 0;
+      updates.not_received_units = line.expected_units;
+    }
+
+    if (status === 'damaged') {
+      updates.damaged_units = line.expected_units;
+    }
+
     const { error } = await supabase
       .from('grn_lines')
       .update(updates)
-      .eq('id', lineId);
+      .eq('id', line.id);
 
     if (error) {
-      toast.error('Update failed: ' + error.message);
-      return false;
+      toast.error('Failed to update line');
+      return;
     }
 
+    toast.success('Line updated');
     await loadLines(grnId);
-    await loadData();
-    return true;
-  }
-
-  async function markReceived(grnId: string, lineId: string, line: any) {
-    const ok = await updateLine(grnId, lineId, {
-      status: 'received',
-      received_boxes: line.expected_boxes,
-      received_units: line.expected_units,
-    });
-    if (ok) toast.success('Marked as fully received');
-  }
-
-  async function markNotReceived(grnId: string, lineId: string) {
-    const ok = await updateLine(grnId, lineId, {
-      status: 'not_received',
-      received_units: 0,
-      received_boxes: 0,
-    });
-    if (ok) toast.success('Marked as not received');
-  }
-
-  async function resetLine(grnId: string, lineId: string) {
-    await updateLine(grnId, lineId, {
-      status: 'pending',
-      received_units: 0,
-      received_boxes: 0,
-      damaged_units: 0,
-      damage_notes: null,
-    });
-  }
-
-  /* ================================
-     DAMAGE MODAL
-  ================================= */
-  function openDamageModal(grnId: string, line: any) {
-    setDamageModal({ grnId, line });
-    setDamagedUnits(line.expected_units);
-    setDamageNotes('');
-  }
-
-  async function confirmDamage() {
-    if (!damageModal) return;
-
-    const ok = await updateLine(
-      damageModal.grnId,
-      damageModal.line.id,
-      {
-        status: 'damaged',
-        damaged_units: damagedUnits,
-        damage_notes: damageNotes || null,
-      }
-    );
-
-    if (ok) {
-      toast.success('Marked as damaged');
-      setDamageModal(null);
-    }
-  }
-
-  /* ================================
-     PARTIAL RECEIVE MODAL
-  ================================= */
-  function openPartialModal(grnId: string, line: any) {
-    setPartialModal({ grnId, line });
-    setPartialBoxes(line.expected_boxes);
-    setPartialUnits(line.expected_units);
-  }
-
-  async function confirmPartial() {
-    if (!partialModal) return;
-
-    const ok = await updateLine(
-      partialModal.grnId,
-      partialModal.line.id,
-      {
-        status: 'received',
-        received_boxes: partialBoxes,
-        received_units: partialUnits,
-        not_received_units:
-          partialModal.line.expected_units - partialUnits,
-      }
-    );
-
-    if (ok) {
-      toast.success('Partial receive saved');
-      setPartialModal(null);
-    }
+    await loadGRNs();
   }
 
   /* ================================
      FINALIZE GRN
   ================================= */
   async function finalizeGRN(grnId: string) {
-    const lines = grnLines[grnId] ?? [];
+    const lines = grnLines[grnId] || [];
 
-    if (!lines.every(l => l.status !== 'pending')) {
+    if (lines.some((l) => l.status === 'pending')) {
       toast.error('All lines must be processed before finalizing');
       return;
     }
 
     setFinalizing(grnId);
 
-    const receivedLines = lines.filter(l => l.status === 'received');
+    try {
+      const receivedLines = lines.filter(
+        (l) => l.status === 'received'
+      );
 
-    for (const line of receivedLines) {
-      const { data: lotNum } = await supabase.rpc('next_doc_number', {
-        p_doc_type: 'LOT',
-      });
+      for (const line of receivedLines) {
+        // Generate Lot Number
+        const { data: lotNumber } = await supabase.rpc(
+          'next_doc_number',
+          { p_doc_type: 'LOT' }
+        );
 
-      const { data: lot, error: lotErr } = await supabase
-        .from('lots')
-        .insert({
-          lot_number: lotNum,
-          grn_id: grnId,
-          grn_line_id: line.id,
-          sku_id: line.sku_id,
-          received_date: new Date().toISOString().split('T')[0],
-          received_units: line.received_units,
-          remaining_units: line.received_units,
-          unit_cost: line.unit_price,
-        })
-        .select()
-        .single();
+        // Create Lot
+        const { error: lotError } = await supabase
+          .from('lots')
+          .insert({
+            lot_number: lotNumber,
+            grn_id: grnId,
+            grn_line_id: line.id,
+            sku_id: line.sku_id,
+            received_date: new Date()
+              .toISOString()
+              .split('T')[0],
+            received_units: line.received_units,
+            remaining_units: line.received_units,
+            unit_cost: line.unit_price,
+          });
 
-      if (lotErr || !lot) {
-        toast.error('Failed to create lot');
-        setFinalizing(null);
-        return;
+        if (lotError) throw lotError;
+
+        // Update Stock
+        await supabase.rpc('update_stock_master', {
+          p_sku_id: line.sku_id,
+          p_delta: line.received_units,
+        });
       }
 
-      await supabase.rpc('update_stock_master', {
-        p_sku_id: line.sku_id,
-        p_delta: line.received_units,
-      });
+      // Update GRN Status
+      await supabase
+        .from('grns')
+        .update({
+          status: 'finalized',
+          finalized_by: profile?.id,
+          finalized_at: new Date().toISOString(),
+        })
+        .eq('id', grnId);
+
+      // Update PO Status
+      const grn = grns.find((g) => g.id === grnId);
+      if (grn?.po_id) {
+        await supabase
+          .from('purchase_orders')
+          .update({ status: 'completed' })
+          .eq('id', grn.po_id);
+      }
+
+      toast.success('GRN finalized successfully');
+      setExpandedGrn(null);
+      await loadGRNs();
+    } catch (error: any) {
+      toast.error(`Finalization failed: ${error.message}`);
     }
 
-    await supabase
-      .from('grns')
-      .update({
-        status: 'finalized',
-        finalized_by: profile?.id,
-        finalized_at: new Date().toISOString(),
-      })
-      .eq('id', grnId);
-
-    toast.success('GRN finalized successfully');
     setFinalizing(null);
-    loadData();
   }
 
   /* ================================
      FILTERING
   ================================= */
-  const filtered = grns.filter(g =>
+  const filtered = grns.filter((g) =>
     g.grn_number?.toLowerCase().includes(search.toLowerCase()) ||
     g.purchase_orders?.po_number
       ?.toLowerCase()
@@ -337,109 +255,147 @@ export default function GRNPage() {
     <AppLayout>
       <PageGuard>
         <div className="space-y-4">
+          {/* Header */}
           <div className="page-header">
             <div>
               <h1 className="page-title">GRN — Goods Receipt</h1>
-              <p className="text-sm text-slate-500 mt-0.5">
+              <p className="text-sm text-slate-500">
                 {filtered.length} records
               </p>
             </div>
             <SearchInput value={search} onChange={setSearch} />
           </div>
 
+          {/* Content */}
           {loading ? (
             <PageLoader />
-          ) : (
+          ) : filtered.length === 0 ? (
             <div className="card p-6 text-center text-slate-500">
-              GRN module loaded successfully.
+              No GRNs available.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {filtered.map((grn) => {
+                const summaryLines = grn.grn_lines || [];
+                const pending = summaryLines.filter(
+                  (l: any) => l.status === 'pending'
+                ).length;
+
+                return (
+                  <div key={grn.id} className="card overflow-hidden">
+                    {/* GRN Header */}
+                    <div
+                      className="flex items-center justify-between px-5 py-4 cursor-pointer hover:bg-slate-50"
+                      onClick={() => toggleExpand(grn.id)}
+                    >
+                      <div className="flex items-center gap-4">
+                        {expandedGrn === grn.id ? (
+                          <ChevronDown className="w-4 h-4 text-slate-400" />
+                        ) : (
+                          <ChevronRight className="w-4 h-4 text-slate-400" />
+                        )}
+
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono font-bold text-brand-700">
+                              {grn.grn_number}
+                            </span>
+                            <StatusBadge status={grn.status} />
+                          </div>
+                          <p className="text-sm text-slate-500">
+                            {grn.purchase_orders?.suppliers?.name} · PO:{' '}
+                            {grn.purchase_orders?.po_number} ·{' '}
+                            {formatDate(grn.grn_date)}
+                          </p>
+                        </div>
+                      </div>
+
+                      {grn.status === 'in_progress' &&
+                        pending === 0 && (
+                          <button
+                            className="btn-primary btn-sm flex items-center gap-2"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              finalizeGRN(grn.id);
+                            }}
+                            disabled={finalizing === grn.id}
+                          >
+                            <PackageCheck className="w-4 h-4" />
+                            {finalizing === grn.id
+                              ? 'Finalizing...'
+                              : 'Finalize GRN'}
+                          </button>
+                        )}
+                    </div>
+
+                    {/* GRN Lines */}
+                    {expandedGrn === grn.id && (
+                      <div className="border-t p-4 bg-slate-50">
+                        {linesLoading[grn.id] ? (
+                          <p className="text-sm text-slate-500">
+                            Loading lines...
+                          </p>
+                        ) : (
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="text-left border-b">
+                                <th className="py-2">SKU</th>
+                                <th>Expected</th>
+                                <th>Received</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {grnLines[grn.id]?.map((line: any) => (
+                                <tr key={line.id} className="border-b">
+                                  <td className="py-2">
+                                    {line.skus?.display_name}
+                                  </td>
+                                  <td>{line.expected_units}</td>
+                                  <td>{line.received_units || 0}</td>
+                                  <td>
+                                    <StatusBadge status={line.status} />
+                                  </td>
+                                  <td className="space-x-2">
+                                    <button
+                                      className="btn-success btn-xs"
+                                      onClick={() =>
+                                        updateLine(
+                                          grn.id,
+                                          line,
+                                          'received'
+                                        )
+                                      }
+                                    >
+                                      Receive
+                                    </button>
+                                    <button
+                                      className="btn-danger btn-xs"
+                                      onClick={() =>
+                                        updateLine(
+                                          grn.id,
+                                          line,
+                                          'not_received'
+                                        )
+                                      }
+                                    >
+                                      Reject
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
-
-        {/* Damage Modal */}
-        <Modal
-          open={!!damageModal}
-          onClose={() => setDamageModal(null)}
-          title="Mark as Damaged"
-          size="sm"
-        >
-          {damageModal && (
-            <div className="space-y-4">
-              <FormField label="Damaged Units">
-                <input
-                  type="number"
-                  value={damagedUnits}
-                  onChange={e => setDamagedUnits(Number(e.target.value))}
-                  className="input"
-                />
-              </FormField>
-              <FormField label="Damage Notes">
-                <textarea
-                  value={damageNotes}
-                  onChange={e => setDamageNotes(e.target.value)}
-                  className="input"
-                />
-              </FormField>
-              <div className="flex justify-end gap-2">
-                <button
-                  className="btn-secondary btn-sm"
-                  onClick={() => setDamageModal(null)}
-                >
-                  Cancel
-                </button>
-                <button
-                  className="btn-danger btn-sm"
-                  onClick={confirmDamage}
-                >
-                  Confirm
-                </button>
-              </div>
-            </div>
-          )}
-        </Modal>
-
-        {/* Partial Receive Modal */}
-        <Modal
-          open={!!partialModal}
-          onClose={() => setPartialModal(null)}
-          title="Partial Receive"
-          size="sm"
-        >
-          {partialModal && (
-            <div className="space-y-4">
-              <FormField label="Received Boxes">
-                <input
-                  type="number"
-                  value={partialBoxes}
-                  onChange={e => setPartialBoxes(Number(e.target.value))}
-                  className="input"
-                />
-              </FormField>
-              <FormField label="Received Units">
-                <input
-                  type="number"
-                  value={partialUnits}
-                  onChange={e => setPartialUnits(Number(e.target.value))}
-                  className="input"
-                />
-              </FormField>
-              <div className="flex justify-end gap-2">
-                <button
-                  className="btn-secondary btn-sm"
-                  onClick={() => setPartialModal(null)}
-                >
-                  Cancel
-                </button>
-                <button
-                  className="btn-primary btn-sm"
-                  onClick={confirmPartial}
-                >
-                  Confirm
-                </button>
-              </div>
-            </div>
-          )}
-        </Modal>
       </PageGuard>
     </AppLayout>
   );
