@@ -59,9 +59,6 @@ const navigation: NavItem[] = [
     ]
   },
   {
-    label: 'Suggestions', icon: Lightbulb, href: '/suggestions',
-  },
-  {
     label: 'Masters', icon: Settings, roles: ['admin', 'sales_manager'],
     children: [
       { label: 'Manufacturers', href: '/masters/manufacturers', icon: Building2 },
@@ -75,7 +72,7 @@ const navigation: NavItem[] = [
   },
   { label: 'Users', href: '/users', icon: Users, roles: ['admin'] },
   { label: 'Client Portal', href: '/client', icon: Globe, roles: ['admin', 'sales_manager'] },
-  { label: 'Suggestions', href: '/suggestions', icon: Lightbulb },
+  { label: 'Suggestions', href: '/suggestions', icon: Lightbulb, roles: ['admin'] },
 ]
 
 function NavItemComponent({ item, depth = 0 }: { item: NavItem; depth?: number }) {
