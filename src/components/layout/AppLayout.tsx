@@ -8,7 +8,7 @@ import {
   LayoutDashboard, Package2, ShoppingCart, Truck, ClipboardList,
   FileText, RotateCcw, BarChart2, Settings, LogOut, Menu, X,
   Boxes, Building2, Users, Layers, Tag, Warehouse, ChevronDown, ChevronRight,
-  PackageCheck, PackageSearch, Receipt, AlertTriangle, Globe, Lock, ClipboardEdit
+  PackageCheck, PackageSearch, Receipt, AlertTriangle, Globe, Lock, ClipboardEdit, Lightbulb
 } from 'lucide-react'
 
 interface NavItem {
@@ -54,8 +54,12 @@ const navigation: NavItem[] = [
     label: 'Reports', icon: BarChart2,
     children: [
       { label: 'Analytics', href: '/reports/analytics', icon: BarChart2 },
-      { label: 'Export', href: '/reports/export', icon: FileText },
+      { label: 'Charts', href: '/reports/charts', icon: Layers },
+      { label: 'Export', href: '/reports/export', icon: ClipboardEdit },
     ]
+  },
+  {
+    label: 'Suggestions', icon: Lightbulb, href: '/suggestions',
   },
   {
     label: 'Masters', icon: Settings, roles: ['admin', 'sales_manager'],
@@ -71,6 +75,7 @@ const navigation: NavItem[] = [
   },
   { label: 'Users', href: '/users', icon: Users, roles: ['admin'] },
   { label: 'Client Portal', href: '/client', icon: Globe, roles: ['admin', 'sales_manager'] },
+  { label: 'Suggestions', href: '/suggestions', icon: Lightbulb },
 ]
 
 function NavItemComponent({ item, depth = 0 }: { item: NavItem; depth?: number }) {
