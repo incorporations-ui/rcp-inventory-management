@@ -78,11 +78,17 @@ export default function InvoicesPage() {
         docType: 'TAX_INVOICE', docNumber: inv.invoice_number,
         docDate: formatDate(inv.invoice_date), soNumber: inv.sales_orders?.so_number,
         customer: { name: inv.customers?.name, address_line1: inv.customers?.address_line1, city: inv.customers?.city, state: inv.customers?.state, gstin: inv.customers?.gstin },
-        lines: (lines ?? []).map((l: any) => ({
-          description: l.skus?.display_name ?? l.skus?.sku_code ?? '—', sku_code: l.skus?.sku_code,
-          hsn_code: l.skus?.hsn_code ?? '', qty: l.units, unit_price: Number(l.unit_price),
-          gst_rate: Number(l.gst_rate), line_amount: Number(l.line_amount), line_gst: Number(l.line_gst),
-        })),
+        lines: (lines ?? []).map((l: any) => {
+          const unitPrice = Number(l.unit_price)
+          const gstRate = Number(l.gst_rate)
+          const lineAmt = +(l.units * unitPrice).toFixed(2)
+          const lineGst = +(lineAmt * gstRate / 100).toFixed(2)
+          return {
+            description: l.skus?.display_name ?? l.skus?.sku_code ?? '—', sku_code: l.skus?.sku_code,
+            hsn_code: l.skus?.hsn_code ?? '', qty: l.units, unit_price: unitPrice,
+            gst_rate: gstRate, line_amount: lineAmt, line_gst: lineGst,
+          }
+        }),
         subtotal: Number(inv.subtotal), totalGst: Number(inv.total_gst), grandTotal: Number(inv.grand_total),
         notes: inv.notes,
       })
