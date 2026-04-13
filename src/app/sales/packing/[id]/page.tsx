@@ -29,6 +29,7 @@ export default function PackingListDetailPage({ params }: { params: { id: string
   const [lines, setLines] = useState<any[]>([])
   const [invoice, setInvoice] = useState<any>(null)
   const [allRacks, setAllRacks] = useState<any[]>([])
+  const [rackStockBySku, setRackStockBySku] = useState<Record<string, any[]>>({})
   const [loading, setLoading] = useState(true)
   const [finalizing, setFinalizing] = useState(false)
   const [cancelling, setCancelling] = useState(false)
@@ -68,7 +69,7 @@ export default function PackingListDetailPage({ params }: { params: { id: string
               stock_master(total_units, reserved_units, available_units)
             `)
             .eq('packing_list_id', id).order('id'),
-          supabase.from('racks').select('id, rack_id_display').eq('status', 'active').order('rack_id_display'),
+          supabase.from('racks').select('id, rack_id_display').eq('status', 'active').order('rack_id_display'),  // kept for QR scan lookup
         ])
 
       if (plError) throw plError
@@ -79,11 +80,34 @@ export default function PackingListDetailPage({ params }: { params: { id: string
       setLines(lineData || [])
       setAllRacks(rackData ?? [])
 
+      // Load rack_stock for each unique SKU in pending lines
+      const pendingSkuIds = [...new Set((lineData ?? [])
+        .filter((l: any) => l.status === 'pending')
+        .map((l: any) => l.sku_id))]
+      if (pendingSkuIds.length > 0) {
+        const { data: rsData } = await supabase
+          .from('rack_stock')
+          .select('rack_id, sku_id, units_count, racks(rack_id_display)')
+          .in('sku_id', pendingSkuIds)
+          .gt('units_count', 0)
+          .order('racks(rack_id_display)')
+        const bySkuId: Record<string, any[]> = {}
+        ;(rsData ?? []).forEach((rs: any) => {
+          if (!bySkuId[rs.sku_id]) bySkuId[rs.sku_id] = []
+          bySkuId[rs.sku_id].push({
+            rack_id: rs.rack_id,
+            rack_display: rs.racks?.rack_id_display ?? '',
+            units_count: rs.units_count,
+          })
+        })
+        setRackStockBySku(bySkuId)
+      }
+
       // Initialise rack picks for pending lines
       const picks: Record<string, RackPick[]> = {}
       ;(lineData ?? []).forEach((line: any) => {
         if (line.status === 'pending') {
-          // Pre-fill with suggested rack if available
+          // Pre-fill with suggested rack if available, otherwise leave blank
           picks[line.id] = line.rack
             ? [{ rack_id: line.rack_id ?? '', rack_display: line.rack?.rack_id_display ?? '', units: line.ordered_units }]
             : [{ rack_id: '', rack_display: '', units: line.ordered_units }]
@@ -119,12 +143,15 @@ export default function PackingListDetailPage({ params }: { params: { id: string
     }))
   }
 
-  function updateRackPick(lineId: string, idx: number, field: keyof RackPick, value: string | number) {
+  function updateRackPick(lineId: string, idx: number, field: keyof RackPick, value: string | number, skuId?: string) {
     setRackPicks(prev => {
       const picks = [...(prev[lineId] ?? [])]
       if (field === 'rack_id') {
-        const rack = allRacks.find(r => r.id === value)
-        picks[idx] = { ...picks[idx], rack_id: value as string, rack_display: rack?.rack_id_display ?? '' }
+        // Look up from rackStockBySku first (has units_count), fall back to allRacks for QR scan
+        const rackFromStock = skuId ? (rackStockBySku[skuId] ?? []).find(r => r.rack_id === value) : null
+        const rackFromAll = allRacks.find(r => r.id === value)
+        const display = rackFromStock?.rack_display ?? rackFromAll?.rack_id_display ?? ''
+        picks[idx] = { ...picks[idx], rack_id: value as string, rack_display: display }
       } else {
         picks[idx] = { ...picks[idx], [field]: value }
       }
@@ -305,8 +332,40 @@ export default function PackingListDetailPage({ params }: { params: { id: string
     setFinalizing(true)
     try {
       for (const line of packedLines) {
+        // 1. Deduct from aggregate stock master
         const { error: stockErr } = await supabase.rpc('update_stock_master', { p_sku_id: line.sku_id, p_delta: -line.packed_units })
         if (stockErr) console.warn('Stock deduction warning:', stockErr.message)
+
+        // 2. Deduct from rack_stock using the rack picks stored on the line
+        let picks: { rack_id: string; units: number }[] = []
+        try { picks = JSON.parse(line.rack_picks_json ?? '[]') } catch {}
+        for (const pick of picks) {
+          if (!pick.rack_id || !pick.units) continue
+          const { data: rs } = await supabase
+            .from('rack_stock')
+            .select('id, units_count')
+            .eq('rack_id', pick.rack_id)
+            .eq('sku_id', line.sku_id)
+            .maybeSingle()
+          if (rs) {
+            const newCount = Math.max(0, rs.units_count - pick.units)
+            if (newCount === 0) {
+              await supabase.from('rack_stock').delete().eq('id', rs.id)
+            } else {
+              await supabase.from('rack_stock').update({ units_count: newCount }).eq('id', rs.id)
+            }
+          }
+        }
+
+        // 3. Log outbound stock movement
+        await supabase.from('stock_movements').insert({
+          sku_id: line.sku_id,
+          movement_type: 'so_out',
+          reference_type: 'packing_list',
+          reference_id: pl.id,
+          units_out: line.packed_units,
+          balance_after: 0,
+        }).then(({ error: e }) => { if (e) console.warn('Movement log warning:', e.message) })
       }
       const { error: plErr } = await supabase.from('packing_lists')
         .update({ status: 'finalized', finalized_at: new Date().toISOString() }).eq('id', pl.id)
@@ -524,11 +583,18 @@ export default function PackingListDetailPage({ params }: { params: { id: string
                           {/* Rack selector */}
                           <select
                             value={pick.rack_id}
-                            onChange={e => updateRackPick(line.id, pidx, 'rack_id', e.target.value)}
+                            onChange={e => updateRackPick(line.id, pidx, 'rack_id', e.target.value, line.sku_id)}
                             className="select text-xs flex-1 min-w-32"
                           >
                             <option value="">Select rack...</option>
-                            {allRacks.map(r => <option key={r.id} value={r.id}>{r.rack_id_display}</option>)}
+                            {(rackStockBySku[line.sku_id] ?? []).length === 0
+                              ? <option disabled value="">No stock in any rack</option>
+                              : (rackStockBySku[line.sku_id] ?? []).map(r => (
+                                <option key={r.rack_id} value={r.rack_id}>
+                                  {r.rack_display} — {r.units_count} units available
+                                </option>
+                              ))
+                            }
                           </select>
 
                           {/* Units */}
