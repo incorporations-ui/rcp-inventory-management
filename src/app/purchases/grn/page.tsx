@@ -280,7 +280,7 @@ export default function GRNPage() {
                         <p className="text-xs font-semibold text-slate-600 mb-2 uppercase tracking-wider">GRN Notes</p>
                         <textarea
                           value={grnNotes[grn.id] ?? ''}
-                          onChange={e => setGrnNotes(prev => ({ ...prev, [grn.id]: e.target.value }))}
+                          onChange={e => { const v = e.target.value; setGrnNotes(prev => ({ ...prev, [grn.id]: v })) }}
                           rows={2}
                           className="input w-full text-sm"
                           placeholder="Vehicle number, driver name, any discrepancies observed..."
